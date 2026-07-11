@@ -228,31 +228,31 @@ class HeaderUserDropdown extends StatelessWidget {
       onSelected: (value) => _handleMenuItemSelected(context, value),
       offset: const Offset(-2, 44),
       itemBuilder: (context) => [
-        PopupMenuItem(
-          value: 'profile',
-          height: 40,
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-          child: Row(
-            children: [
-              const Icon(Icons.person, size: 16),
-              const SizedBox(width: 8),
-              const Text('My Profile'),
-            ],
-          ),
-        ),
-        const PopupMenuDivider(height: 1),
-        PopupMenuItem(
-          value: 'settings',
-          height: 40,
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          child: Row(
-            children: [
-              const Icon(Icons.settings, size: 16),
-              const SizedBox(width: 8),
-              const Text('Settings'),
-            ],
-          ),
-        ),
+        // PopupMenuItem(
+        //   value: 'profile',
+        //   height: 40,
+        //   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+        //   child: Row(
+        //     children: [
+        //       const Icon(Icons.person, size: 16),
+        //       const SizedBox(width: 8),
+        //       const Text('My Profile'),
+        //     ],
+        //   ),
+        // ),
+        // const PopupMenuDivider(height: 1),
+        // PopupMenuItem(
+        //   value: 'settings',
+        //   height: 40,
+        //   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        //   child: Row(
+        //     children: [
+        //       const Icon(Icons.settings, size: 16),
+        //       const SizedBox(width: 8),
+        //       const Text('Settings'),
+        //     ],
+        //   ),
+        // ),
         const PopupMenuDivider(height: 1),
         PopupMenuItem(
           value: 'logout',
@@ -291,15 +291,15 @@ class HeaderUserDropdown extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text(
-                    displayName,
-                    style: const TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      height: 1.1,
-                    ),
-                    overflow: TextOverflow.ellipsis,
-                  ),
+                  // Text(
+                  //   displayName,
+                  //   style: const TextStyle(
+                  //     fontSize: 14,
+                  //     fontWeight: FontWeight.w600,
+                  //     height: 1.1,
+                  //   ),
+                  //   overflow: TextOverflow.ellipsis,
+                  // ),
                   if (role != null)
                     Text(
                       role,

@@ -49,11 +49,7 @@ class NavigationCard extends StatelessWidget {
                       color: Theme.of(context).colorScheme.surface,
                       borderRadius: BorderRadius.circular(8),
                     ),
-                    child: Icon(
-                      icon,
-                      size: 25,
-                      color: Colors.grey.shade900,
-                    ),
+                    child: Icon(icon, size: 25, color: Colors.grey.shade900),
                   ),
                   if (count != null)
                     Container(

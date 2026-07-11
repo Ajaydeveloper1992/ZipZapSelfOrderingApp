@@ -59,6 +59,7 @@ class HeaderWidget extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             HeaderLogo(logoUrl: logoUrl),
+
             HeaderActionButton(
               icon: Icons.home_outlined,
               tooltip: 'Home',
@@ -70,22 +71,23 @@ class HeaderWidget extends StatelessWidget {
                     Navigator.of(context).popUntil((route) => route.isFirst);
                   },
             ),
-            HeaderActionButton(
-              icon: Icons.menu,
-              tooltip: 'Menu',
-              onPressed:
-                  onDrawerPressed ??
-                  () {
-                    Scaffold.of(context).openDrawer();
-                  },
-            ),
-            if (isSmallScreen && onCategoriesPressed != null)
-              HeaderActionButton(
-                icon: Icons.category,
-                tooltip: 'Categories',
-                onPressed: onCategoriesPressed,
-              ),
-            if (isTablet) ...[HeaderSearchBox(onChanged: onSearchChanged)],
+
+            // HeaderActionButton(
+            //   icon: Icons.menu,
+            //   tooltip: 'Menu',
+            //   onPressed:
+            //       onDrawerPressed ??
+            //       () {
+            //         Scaffold.of(context).openDrawer();
+            //       },
+            // ),
+            //if (isSmallScreen && onCategoriesPressed != null)
+            // HeaderActionButton(
+            //   icon: Icons.category,
+            //   tooltip: 'Categories',
+            //   onPressed: onCategoriesPressed,
+            // ),
+            //if (isTablet) ...[HeaderSearchBox(onChanged: onSearchChanged)],
             const Spacer(),
             if (onRefresh != null)
               IconButton(
