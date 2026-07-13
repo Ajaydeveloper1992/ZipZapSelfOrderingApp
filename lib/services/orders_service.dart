@@ -524,6 +524,7 @@ class OrdersService {
   // Update an existing order
   Future<Order> updateOrder({
     required String orderId,
+    String? store,
     List<Map<String, dynamic>>? items,
     double? subtotal,
     double? total,
@@ -545,6 +546,7 @@ class OrdersService {
       final body = <String, dynamic>{};
 
       if (items != null) body['items'] = items;
+      if (store != null && store.isNotEmpty) body['store'] = store;
       if (subtotal != null) body['subtotal'] = subtotal;
       if (total != null) body['total'] = total;
       if (tax != null) body['tax'] = tax;

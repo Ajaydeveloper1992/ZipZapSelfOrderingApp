@@ -83,6 +83,30 @@ class _NewDineInPageState extends State<NewDineInPage> {
     _loadModifiers();
   }
 
+  /// Resolve the current store ID from DataProvider, profile, or auth.
+  /// If `orderId` is provided and storeId cannot be resolved locally,
+  /// try fetching the order to obtain its store.
+  Future<String?> _resolveStoreId([String? orderId]) async {
+    final dataProvider = _dataProvider;
+    final profile = _authService.getProfile();
+    String? storeId =
+        dataProvider.store?.id ?? profile?.storeId ?? _authService.getStoreId();
+
+    if (storeId == null && orderId != null) {
+      try {
+        final order = await _ordersService.getOrderById(
+          orderId,
+          forceRefresh: true,
+        );
+        storeId = order.store?.id;
+      } catch (e) {
+        debugPrint('Failed to resolve store from order: $e');
+      }
+    }
+
+    return storeId;
+  }
+
   @override
   void dispose() {
     _dataProvider.removeListener(_onDataUpdate);
@@ -300,8 +324,7 @@ class _NewDineInPageState extends State<NewDineInPage> {
         inKitchen:
             inKitchen, // Items from InKitchen orders are already in kitchen
         itemStatus: orderItem.itemStatus, // Preserve void/refund status
-        guestGroup:
-            orderItem.guestGroup ?? 'whole_table', // Restore guest group
+        guestGroup: 'whole_table',
       );
 
       cartItems.add(cartItem);
@@ -434,9 +457,11 @@ class _NewDineInPageState extends State<NewDineInPage> {
     // If in edit mode, immediately update the order with new customer
     if (_isEditMode && _editingOrderId != null) {
       try {
-        // Update order via API with just the customer
+        // Resolve store and update order via API with just the customer
+        final storeId = await _resolveStoreId(_editingOrderId);
         final updatedOrder = await _ordersService.updateOrder(
           orderId: _editingOrderId!,
+          store: storeId,
           customer: customer?.id,
           phone: customer?.phone,
         );
@@ -563,9 +588,6 @@ class _NewDineInPageState extends State<NewDineInPage> {
     // Items already in kitchen should never be merged
     if (item1.inKitchen || item2.inKitchen) return false;
 
-    // Check guest group - items for different guests should not be merged
-    if (item1.guestGroup != item2.guestGroup) return false;
-
     // Check product ID
     if (item1.product.id != item2.product.id) return false;
 
@@ -648,8 +670,7 @@ class _NewDineInPageState extends State<NewDineInPage> {
             item.modifiers.isEmpty &&
             item.itemNote.isEmpty &&
             item.itemDiscount == null &&
-            !item.inKitchen && // Don't merge with items already in kitchen
-            item.guestGroup == _selectedGuestGroup, // Same guest group
+            !item.inKitchen, // Don't merge with items already in kitchen
       );
 
       if (existingIndex != -1) {
@@ -667,7 +688,7 @@ class _NewDineInPageState extends State<NewDineInPage> {
               id: const Uuid().v4(),
               product: product,
               quantity: 1,
-              guestGroup: _selectedGuestGroup, // Assign to selected guest group
+              guestGroup: 'whole_table',
             ),
           );
         });
@@ -716,7 +737,7 @@ class _NewDineInPageState extends State<NewDineInPage> {
             product: customProduct,
             quantity: customItemData['quantity'],
             itemNote: customItemData['itemNote'] ?? '',
-            guestGroup: _selectedGuestGroup, // Assign to selected guest group
+            guestGroup: 'whole_table',
           );
 
           setState(() {
@@ -868,9 +889,11 @@ class _NewDineInPageState extends State<NewDineInPage> {
           };
         }
 
-        // Update order via API
+        // Resolve store and update order via API
+        final storeId = await _resolveStoreId(_editingOrderId);
         final updatedOrder = await _ordersService.updateOrder(
           orderId: _editingOrderId!,
+          store: storeId,
           items: items,
           subtotal: subtotal,
           total: total,
@@ -1020,9 +1043,11 @@ class _NewDineInPageState extends State<NewDineInPage> {
           discountMap = {'type': discount.type, 'value': discount.value};
         }
 
-        // Update order via API
+        // Resolve store and update order via API
+        final storeId = await _resolveStoreId(_editingOrderId);
         final updatedOrder = await _ordersService.updateOrder(
           orderId: _editingOrderId!,
+          store: storeId,
           items: items,
           subtotal: subtotal,
           total: total,
@@ -1078,16 +1103,33 @@ class _NewDineInPageState extends State<NewDineInPage> {
     });
 
     try {
-      // Only create order if not in edit mode (new order)
-      if (!_isEditMode) {
-        // Get store ID from DataProvider (source of truth)
-        final dataProvider = DataProvider();
-        final profile = _authService.getProfile();
-        final storeId = dataProvider.store?.id ?? profile?.storeId;
-        if (storeId == null) {
-          throw Exception('Store ID not found. Please login again.');
-        }
+      // Resolve store ID early (used for create AND update flows)
+      final dataProvider = DataProvider();
+      final profile = _authService.getProfile();
+      String? storeId =
+          dataProvider.store?.id ??
+          profile?.storeId ??
+          _authService.getStoreId();
 
+      // If still null and we're editing an order, try fetching order details
+      if (storeId == null && _isEditMode && _editingOrderId != null) {
+        try {
+          final existingOrder = await _ordersService.getOrderById(
+            _editingOrderId!,
+            forceRefresh: true,
+          );
+          storeId = existingOrder.store?.id;
+        } catch (e) {
+          debugPrint('Failed to fetch existing order to resolve store: $e');
+        }
+      }
+
+      if (storeId == null) {
+        throw Exception('Store ID not found. Please login again.');
+      }
+
+      // If not edit mode, create a new order; otherwise fall through to update
+      if (!_isEditMode) {
         // Calculate totals
         final subtotal = _cartItems
             .where((item) => item.itemStatus != 'Voided')
@@ -1353,6 +1395,7 @@ class _NewDineInPageState extends State<NewDineInPage> {
         // Update order via API
         final updatedOrder = await _ordersService.updateOrder(
           orderId: _editingOrderId!,
+          store: storeId,
           items: items,
           subtotal: subtotal,
           total: total,
@@ -2766,9 +2809,11 @@ class _NewDineInPageState extends State<NewDineInPage> {
                   })
                   .toList();
 
-              // Call updateOrder with updated items
+              // Resolve store and call updateOrder with updated items
+              final storeId = await _resolveStoreId(_editingOrderId);
               final updatedOrder = await _ordersService.updateOrder(
                 orderId: _editingOrderId!,
+                store: storeId,
                 items: items,
               );
 
@@ -2893,6 +2938,7 @@ class _NewDineInPageState extends State<NewDineInPage> {
               : null,
           endDrawer: isSmallScreen
               ? CartDrawer(
+                  isSelfOrder: true,
                   cartItems: _cartItems,
                   cartData: _cartData,
                   orderId: _editingOrderId,
@@ -3105,6 +3151,7 @@ class _NewDineInPageState extends State<NewDineInPage> {
                       // Cart Sidebar (right) - only on large screens
                       if (!isSmallScreen)
                         CartDrawer(
+                          isSelfOrder: true,
                           cartItems: _cartItems,
                           cartData: _cartData,
                           orderId: _editingOrderId,

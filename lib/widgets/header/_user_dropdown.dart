@@ -27,6 +27,9 @@ class HeaderUserDropdown extends StatelessWidget {
         debugPrint('Settings selected');
         // Navigator.push(context, MaterialPageRoute(builder: (_) => SettingsPage()));
         break;
+      case 'printers':
+        Navigator.of(context).pushNamed('/printers');
+        break;
       case 'logout':
         await _handleLogout(context);
         break;
@@ -228,6 +231,18 @@ class HeaderUserDropdown extends StatelessWidget {
       onSelected: (value) => _handleMenuItemSelected(context, value),
       offset: const Offset(-2, 44),
       itemBuilder: (context) => [
+        PopupMenuItem(
+          value: 'printers',
+          height: 40,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+          child: Row(
+            children: [
+              const Icon(Icons.print, size: 16),
+              const SizedBox(width: 8),
+              const Text('Printer Settings'),
+            ],
+          ),
+        ),
         // PopupMenuItem(
         //   value: 'profile',
         //   height: 40,

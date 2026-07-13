@@ -61,6 +61,7 @@ class CartDrawer extends StatefulWidget {
   final bool isPrintingQuote;
   final bool isCreatingOrder;
   final bool isEditMode;
+  final bool isSelfOrder;
   final String? orderType;
 
   const CartDrawer({
@@ -103,6 +104,7 @@ class CartDrawer extends StatefulWidget {
     this.isPrintingQuote = false,
     this.isCreatingOrder = false,
     this.isEditMode = false,
+    this.isSelfOrder = false,
     this.orderType,
   });
 
@@ -365,43 +367,12 @@ class _CartDrawerState extends State<CartDrawer> {
           children: [
             // Header with actions
             _buildHeader(context),
-            // Guest Info Header (Guests count + Occupied time) - Only for dine-in
-            if (widget.orderType == 'dineIn' || widget.currentTableName != null)
-              _buildGuestInfoHeader(context),
-            // Cart Items with Guest Sections
+            // Cart Items list only; single whole-table order mode
             Expanded(
               child:
-                  widget.orderType == 'dineIn' ||
-                      widget.currentTableName != null
-                  ? Container(
-                      color: Theme.of(context)
-                          .colorScheme
-                          .surfaceContainerHighest
-                          .withValues(alpha: 0.3),
-                      child: ListView(
-                        padding: const EdgeInsets.all(4),
-                        children: [
-                          // Whole Table Section
-                          _buildGuestSection(
-                            context,
-                            'whole_table',
-                            'Whole Table',
-                            Icons.table_restaurant,
-                          ),
-                          // Individual Guest Sections
-                          for (int i = 1; i <= _guestCount; i++)
-                            _buildGuestSection(
-                              context,
-                              'guest_$i',
-                              'Guest $i',
-                              Icons.person,
-                            ),
-                        ],
-                      ),
-                    )
-                  : widget.cartItems
-                        .where((item) => item.itemStatus != 'Voided')
-                        .isEmpty
+                  widget.cartItems
+                      .where((item) => item.itemStatus != 'Voided')
+                      .isEmpty
                   ? Center(
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
@@ -779,133 +750,102 @@ class _CartDrawerState extends State<CartDrawer> {
             ),
           ),
           // Menu Button
-          PopupMenuButton<String>(
-            icon: const Icon(Icons.more_vert, color: Colors.white, size: 20),
-            color: Theme.of(context).colorScheme.surface,
-            offset: const Offset(-10, 40),
-            onSelected: (value) {
-              switch (value) {
-                case 'customer':
-                  widget.onCustomerSelect?.call();
-                  break;
-                case 'print_quote':
-                  widget.onPrintQuote?.call();
-                  break;
-                case 'print_split_receipt':
-                  widget.onPrintSplitReceipt?.call();
-                  break;
-                case 'shift_guest':
-                  widget.onShiftGuestTap?.call();
-                  break;
-                case 'void':
-                  _showVoidModal(context);
-                  break;
-                case 'clear':
-                  widget.onClearCart?.call();
-                  break;
-              }
-            },
-            itemBuilder: (context) => [
-              PopupMenuItem(
-                value: 'customer',
-                height: 24,
-                child: Row(
-                  children: [
-                    const Icon(Icons.person, size: 16),
-                    const SizedBox(width: 8),
-                    const Text('Customer'),
-                  ],
-                ),
-              ),
-              const PopupMenuDivider(),
-              PopupMenuItem(
-                value: 'print_quote',
-                height: 24,
-                child: Row(
-                  children: [
-                    const Icon(Icons.print, size: 16),
-                    const SizedBox(width: 8),
-                    const Text('Print Quote'),
-                  ],
-                ),
-              ),
-              // Print Split Receipt menu item - only for dine-in orders
-              if (widget.orderType == 'dineIn' ||
-                  widget.currentTableName != null) ...[
-                const PopupMenuDivider(),
-                PopupMenuItem(
-                  value: 'print_split_receipt',
-                  height: 24,
-                  child: Row(
-                    children: [
-                      const Icon(Icons.receipt_long, size: 16),
-                      const SizedBox(width: 8),
-                      const Text('Print Split Receipt'),
-                    ],
-                  ),
-                ),
-              ],
-              // Move Guest menu item - only for dine-in orders
-              if (widget.orderType == 'dineIn' ||
-                  widget.currentTableName != null) ...[
-                const PopupMenuDivider(),
-                PopupMenuItem(
-                  value: 'shift_guest',
-                  height: 24,
-                  child: Row(
-                    children: [
-                      const Icon(Icons.swap_horiz, size: 16),
-                      const SizedBox(width: 8),
-                      const Text('Move Items'),
-                    ],
-                  ),
-                ),
-              ],
-              const PopupMenuDivider(),
-              if (widget.orderId != null)
-                PopupMenuItem(
-                  value: 'void',
-                  height: 24,
-                  child: Row(
-                    children: [
-                      Icon(
-                        Icons.delete,
-                        size: 16,
-                        color: Theme.of(context).colorScheme.error,
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        'Void Order',
-                        style: TextStyle(
-                          color: Theme.of(context).colorScheme.error,
-                        ),
-                      ),
-                    ],
-                  ),
-                )
-              else
-                PopupMenuItem(
-                  value: 'clear',
-                  height: 24,
-                  child: Row(
-                    children: [
-                      Icon(
-                        Icons.delete,
-                        size: 16,
-                        color: Theme.of(context).colorScheme.error,
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        'Clear',
-                        style: TextStyle(
-                          color: Theme.of(context).colorScheme.error,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-            ],
-          ),
+          // PopupMenuButton<String>(
+          //   icon: const Icon(Icons.more_vert, color: Colors.white, size: 20),
+          //   color: Theme.of(context).colorScheme.surface,
+          //   offset: const Offset(-10, 40),
+          //   onSelected: (value) {
+          //     switch (value) {
+          //       case 'customer':
+          //         widget.onCustomerSelect?.call();
+          //         break;
+          //       case 'print_quote':
+          //         widget.onPrintQuote?.call();
+          //         break;
+          //       case 'print_split_receipt':
+          //         widget.onPrintSplitReceipt?.call();
+          //         break;
+          //       case 'shift_guest':
+          //         widget.onShiftGuestTap?.call();
+          //         break;
+          //       case 'void':
+          //         _showVoidModal(context);
+          //         break;
+          //       case 'clear':
+          //         widget.onClearCart?.call();
+          //         break;
+          //     }
+          //   },
+          //   itemBuilder: (context) => [
+          //     PopupMenuItem(
+          //       value: 'customer',
+          //       height: 24,
+          //       child: Row(
+          //         children: [
+          //           const Icon(Icons.person, size: 16),
+          //           const SizedBox(width: 8),
+          //           const Text('Customer'),
+          //         ],
+          //       ),
+          //     ),
+          //     const PopupMenuDivider(),
+          //     PopupMenuItem(
+          //       value: 'print_quote',
+          //       height: 24,
+          //       child: Row(
+          //         children: [
+          //           const Icon(Icons.print, size: 16),
+          //           const SizedBox(width: 8),
+          //           const Text('Print Quote'),
+          //         ],
+          //       ),
+          //     ),
+          //     // Hide split receipt and guest move actions in single-order mode.
+          //     const PopupMenuDivider(),
+          //     if (widget.orderId != null)
+          //       PopupMenuItem(
+          //         value: 'void',
+          //         height: 24,
+          //         child: Row(
+          //           children: [
+          //             Icon(
+          //               Icons.delete,
+          //               size: 16,
+          //               color: Theme.of(context).colorScheme.error,
+          //             ),
+          //             const SizedBox(width: 8),
+          //             Text(
+          //               'Void Order',
+          //               style: TextStyle(
+          //                 color: Theme.of(context).colorScheme.error,
+          //               ),
+          //             ),
+          //           ],
+          //         ),
+          //       )
+          //     else
+          //       PopupMenuItem(
+          //         value: 'clear',
+          //         height: 24,
+          //         child: Row(
+          //           children: [
+          //             Icon(
+          //               Icons.delete,
+          //               size: 16,
+          //               color: Theme.of(context).colorScheme.error,
+          //             ),
+          //             const SizedBox(width: 8),
+          //             Text(
+          //               'Clear',
+          //               style: TextStyle(
+          //                 color: Theme.of(context).colorScheme.error,
+          //               ),
+          //             ),
+          //           ],
+          //         ),
+          //       ),
+          //   ],
+          // ),
         ],
       ),
     );
@@ -946,35 +886,35 @@ class _CartDrawerState extends State<CartDrawer> {
                 Wrap(
                   spacing: 4,
                   children: [
-                    _buildActionButton(
-                      context,
-                      'Note',
-                      widget.onNoteUpdate != null
-                          ? () => _showNoteModal(context)
-                          : widget.onNoteTap,
-                      isActive: widget.cartData?.note?.isNotEmpty ?? false,
-                    ),
-                    _buildActionButton(
-                      context,
-                      'Discount',
-                      widget.onDiscountTap,
-                      isActive:
-                          widget.cartData?.discount != null &&
-                          widget.cartData!.discount!.value != 0,
-                    ),
-                    _buildActionButton(
-                      context,
-                      'Coupon',
-                      widget.onCouponTap,
-                      isActive:
-                          widget.cartData?.coupon?.code.isNotEmpty ?? false,
-                    ),
-                    if (widget.isEditMode)
-                      _buildActionButton(
-                        context,
-                        'Contact',
-                        () => _showContactModal(context),
-                      ),
+                    // _buildActionButton(
+                    //   context,
+                    //   'Note',
+                    //   widget.onNoteUpdate != null
+                    //       ? () => _showNoteModal(context)
+                    //       : widget.onNoteTap,
+                    //   isActive: widget.cartData?.note?.isNotEmpty ?? false,
+                    // ),
+                    // _buildActionButton(
+                    //   context,
+                    //   'Discount',
+                    //   widget.onDiscountTap,
+                    //   isActive:
+                    //       widget.cartData?.discount != null &&
+                    //       widget.cartData!.discount!.value != 0,
+                    // ),
+                    // _buildActionButton(
+                    //   context,
+                    //   'Coupon',
+                    //   widget.onCouponTap,
+                    //   isActive:
+                    //       widget.cartData?.coupon?.code.isNotEmpty ?? false,
+                    // ),
+                    // if (widget.isEditMode)
+                    //   _buildActionButton(
+                    //     context,
+                    //     'Contact',
+                    //     () => _showContactModal(context),
+                    //   ),
                     _buildActionButton(
                       context,
                       'Add Item',
@@ -1045,67 +985,68 @@ class _CartDrawerState extends State<CartDrawer> {
                 return Row(
                   children: [
                     // Shift Table button for dine-in orders
-                    SizedBox(
-                      width: 50,
-                      child: Tooltip(
-                        message: widget.currentTableName != null
-                            ? 'Table: ${widget.currentTableName}'
-                            : 'Change Table',
-                        child: OutlinedButton.icon(
-                          onPressed: widget.onShiftTableTap,
-                          icon: Icon(
-                            Icons.swap_horiz_rounded,
-                            size: 20,
-                            color: widget.currentTableName != null
-                                ? Theme.of(context).colorScheme.primary
-                                : null,
-                          ),
-                          label: const Text(''),
-                          style: OutlinedButton.styleFrom(
-                            side: BorderSide(
-                              color: widget.currentTableName != null
-                                  ? Theme.of(context).colorScheme.primary
-                                  : Theme.of(context).colorScheme.outline,
-                            ),
-                            backgroundColor: widget.currentTableName != null
-                                ? Theme.of(
-                                    context,
-                                  ).colorScheme.primary.withValues(alpha: 0.1)
-                                : null,
-                            shape: const RoundedRectangleBorder(),
-                            fixedSize: const Size.fromHeight(42),
-                            padding: const EdgeInsets.only(left: 8),
-                          ),
-                        ),
-                      ),
-                    ),
+                    // SizedBox(
+                    //   width: 50,
+                    //   child: Tooltip(
+                    //     message: widget.currentTableName != null
+                    //         ? 'Table: ${widget.currentTableName}'
+                    //         : 'Change Table',
+                    //     child: OutlinedButton.icon(
+                    //       onPressed: widget.onShiftTableTap,
+                    //       icon: Icon(
+                    //         Icons.swap_horiz_rounded,
+                    //         size: 20,
+                    //         color: widget.currentTableName != null
+                    //             ? Theme.of(context).colorScheme.primary
+                    //             : null,
+                    //       ),
+                    //       label: const Text(''),
+                    //       style: OutlinedButton.styleFrom(
+                    //         side: BorderSide(
+                    //           color: widget.currentTableName != null
+                    //               ? Theme.of(context).colorScheme.primary
+                    //               : Theme.of(context).colorScheme.outline,
+                    //         ),
+                    //         backgroundColor: widget.currentTableName != null
+                    //             ? Theme.of(
+                    //                 context,
+                    //               ).colorScheme.primary.withValues(alpha: 0.1)
+                    //             : null,
+                    //         shape: const RoundedRectangleBorder(),
+                    //         fixedSize: const Size.fromHeight(42),
+                    //         padding: const EdgeInsets.only(left: 8),
+                    //       ),
+                    //     ),
+                    //   ),
+                    // ),
+
                     // Print Customer Receipt Button
-                    SizedBox(
-                      width: 50,
-                      child: OutlinedButton.icon(
-                        onPressed: !hasItems || widget.isPrintingCustomer
-                            ? null
-                            : widget.onPrintCustomer,
-                        icon: widget.isPrintingCustomer
-                            ? const SizedBox(
-                                width: 18,
-                                height: 18,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                ),
-                              )
-                            : const Icon(Icons.print, size: 20),
-                        label: const Text(''),
-                        style: OutlinedButton.styleFrom(
-                          side: BorderSide(
-                            color: Theme.of(context).colorScheme.primary,
-                          ),
-                          shape: const RoundedRectangleBorder(),
-                          fixedSize: const Size.fromHeight(42),
-                          padding: EdgeInsets.only(left: 8),
-                        ),
-                      ),
-                    ),
+                    // SizedBox(
+                    //   width: 50,
+                    //   child: OutlinedButton.icon(
+                    //     onPressed: !hasItems || widget.isPrintingCustomer
+                    //         ? null
+                    //         : widget.onPrintCustomer,
+                    //     icon: widget.isPrintingCustomer
+                    //         ? const SizedBox(
+                    //             width: 18,
+                    //             height: 18,
+                    //             child: CircularProgressIndicator(
+                    //               strokeWidth: 2,
+                    //             ),
+                    //           )
+                    //         : const Icon(Icons.print, size: 20),
+                    //     label: const Text(''),
+                    //     style: OutlinedButton.styleFrom(
+                    //       side: BorderSide(
+                    //         color: Theme.of(context).colorScheme.primary,
+                    //       ),
+                    //       shape: const RoundedRectangleBorder(),
+                    //       fixedSize: const Size.fromHeight(42),
+                    //       padding: EdgeInsets.only(left: 8),
+                    //     ),
+                    //   ),
+                    // ),
                     Expanded(
                       flex: 3,
                       child: FilledButton.icon(
@@ -1115,10 +1056,13 @@ class _CartDrawerState extends State<CartDrawer> {
                                 widget.isCreatingOrder ||
                                 _total <= 0
                             ? null
-                            : (widget.orderType == 'prepay' ||
-                                      (!_hasNewItems && _allItemsInKitchen)
-                                  ? widget.onCheckout
-                                  : widget.onSendToKitchen),
+                            : (widget.isSelfOrder
+                                  ? widget.onSendToKitchen
+                                  : (widget.orderType == 'prepay' ||
+                                            (!_hasNewItems &&
+                                                _allItemsInKitchen)
+                                        ? widget.onCheckout
+                                        : widget.onSendToKitchen)),
                         icon: widget.isCreatingOrder
                             ? const SizedBox(
                                 width: 20,
@@ -1134,11 +1078,14 @@ class _CartDrawerState extends State<CartDrawer> {
                         label: Text(
                           widget.isCreatingOrder
                               ? 'Creating Order...'
-                              : widget.orderType == 'prepay'
-                              ? 'Confirm Order'
-                              : (!_hasNewItems && _allItemsInKitchen)
-                              ? 'Checkout'
-                              : 'Send to Kitchen',
+                              : (widget.isSelfOrder
+                                    ? 'Send to Kitchen'
+                                    : (widget.orderType == 'prepay'
+                                          ? 'Confirm Order'
+                                          : (!_hasNewItems &&
+                                                _allItemsInKitchen)
+                                          ? 'Checkout'
+                                          : 'Send to Kitchen')),
                           style: const TextStyle(
                             fontSize: 13,
                             fontWeight: FontWeight.w600,
