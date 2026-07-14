@@ -5,10 +5,12 @@ import 'package:zipzap_pos_self_orders/widgets/app_drawer.dart';
 import 'package:zipzap_pos_self_orders/models/dashboard_item_model.dart';
 import 'package:zipzap_pos_self_orders/pages/home/widgets/dashboard_grid.dart';
 import 'package:zipzap_pos_self_orders/modals/dashboard_editor_modal.dart';
+import 'package:zipzap_pos_self_orders/modals/dinein_entry_modal.dart';
 import 'package:zipzap_pos_self_orders/providers/websocket_provider.dart';
+import 'package:zipzap_pos_self_orders/services/floor_plans_service.dart';
+import 'package:zipzap_pos_self_orders/services/orders_service.dart';
 import 'package:zipzap_pos_self_orders/providers/data_provider.dart';
 import 'package:zipzap_pos_self_orders/widgets/data_loading_progress_dialog.dart';
-import 'package:zipzap_pos_self_orders/core/constants/api_constants.dart';
 import 'package:zipzap_pos_self_orders/core/services/auth_service.dart';
 import 'package:zipzap_pos_self_orders/widgets/app_version_text.dart';
 import 'package:zipzap_pos_self_orders/widgets/app_toast.dart';
@@ -27,6 +29,7 @@ class _HomePageState extends State<HomePage> {
   final WebSocketProvider _webSocketProvider = WebSocketProvider();
   final DataProvider _dataProvider = DataProvider();
   final AuthService _authService = AuthService();
+  final FloorPlansService _floorPlansService = FloorPlansService();
   String _storeStatus = 'open';
   late List<DashboardItem> _dashboardItems;
   bool _isTakeoutEnabled = true;
@@ -326,6 +329,176 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
+  Future<void> _promptForUpdateOrderTableNumber() async {
+    final tableController = TextEditingController();
+    String? dialogError;
+    bool isLoading = false;
+
+    Future<void> submitTableNumber(
+      String tableNumber,
+      void Function(VoidCallback fn) localSetState,
+    ) async {
+      if (tableNumber.isEmpty) {
+        localSetState(() {
+          dialogError = 'Please enter a table number';
+        });
+        return;
+      }
+
+      localSetState(() {
+        isLoading = true;
+        dialogError = null;
+      });
+
+      try {
+        final response = await _floorPlansService.getFloorPlans(
+          isActive: true,
+          sortBy: 'createdAt',
+          sortOrder: 'asc',
+        );
+
+        final matchingTable = response.floorPlans.fold<Map<String, dynamic>?>(
+          null,
+          (currentMatch, floorPlan) {
+            if (currentMatch != null) return currentMatch;
+
+            for (final item in floorPlan.items.where(
+              (entry) => entry.type.isTable,
+            )) {
+              final itemName = item.name.trim().toLowerCase();
+              final lookupName = tableNumber.toLowerCase();
+
+              if (itemName == lookupName ||
+                  itemName.contains(lookupName) ||
+                  lookupName.contains(itemName)) {
+                return {
+                  'floorPlanId': floorPlan.id,
+                  'floorPlanName': floorPlan.name,
+                  'tableId': item.id,
+                  'tableName': item.name,
+                };
+              }
+            }
+
+            return null;
+          },
+        );
+
+        if (matchingTable == null) {
+          localSetState(() {
+            dialogError = 'Table number is not found';
+          });
+          return;
+        }
+
+        if (!mounted) return;
+        Navigator.of(context).pop();
+        Navigator.pushNamed(
+          context,
+          '/dinein',
+          arguments: {
+            'tableInfo': {
+              'tableId': matchingTable['tableId'],
+              'tableName': matchingTable['tableName'],
+              'floorPlanId': matchingTable['floorPlanId'],
+              'floorPlanName': matchingTable['floorPlanName'],
+            },
+          },
+        );
+      } catch (e) {
+        localSetState(() {
+          dialogError = e.toString().replaceFirst('Exception: ', '');
+        });
+      } finally {
+        localSetState(() {
+          isLoading = false;
+        });
+      }
+    }
+
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (dialogContext, setState) {
+            return AlertDialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              title: const Text('Enter Table Number'),
+              content: SizedBox(
+                width: 420,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Enter the table number to show that table on the dine-in page.',
+                      style: TextStyle(color: Colors.black54),
+                    ),
+                    const SizedBox(height: 16),
+                    TextField(
+                      controller: tableController,
+                      textInputAction: TextInputAction.done,
+                      decoration: const InputDecoration(
+                        labelText: 'Table Number',
+                        border: OutlineInputBorder(),
+                        prefixIcon: Icon(Icons.table_restaurant),
+                      ),
+                      onSubmitted: (_) async {
+                        if (!isLoading) {
+                          await submitTableNumber(
+                            tableController.text.trim(),
+                            setState,
+                          );
+                        }
+                      },
+                    ),
+                    if (dialogError != null) ...[
+                      const SizedBox(height: 12),
+                      Text(
+                        dialogError ?? '',
+                        style: TextStyle(color: Colors.red.shade700),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: isLoading
+                      ? null
+                      : () {
+                          Navigator.of(dialogContext).pop();
+                        },
+                  child: const Text('Cancel'),
+                ),
+                ElevatedButton(
+                  onPressed: isLoading
+                      ? null
+                      : () async {
+                          await submitTableNumber(
+                            tableController.text.trim(),
+                            setState,
+                          );
+                        },
+                  child: isLoading
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Text('Show Table'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
   Widget _buildStoreStatusFAB(BuildContext context, bool isOpen) {
     final bottomPadding = MediaQuery.of(context).padding.bottom;
     return Positioned(
@@ -459,7 +632,15 @@ class _HomePageState extends State<HomePage> {
       icon: Icons.table_restaurant,
       backgroundColor: Colors.teal.shade100,
       borderColor: Colors.teal.shade300,
-      route: '/dinein',
+      route: '#dinein_entry',
+    ),
+    DashboardItem(
+      title: 'Update Orders',
+      description: 'View tables and update orders',
+      icon: Icons.table_bar,
+      backgroundColor: Colors.blue.shade100,
+      borderColor: Colors.blue.shade300,
+      route: '#update_orders',
     ),
     // DashboardItem(
     //   title: 'Takeout',
@@ -572,6 +753,57 @@ class _HomePageState extends State<HomePage> {
     // ),
   ];
 
+  final OrdersService _ordersService = OrdersService();
+
+  Future<void> _openDineInEntryFlow() async {
+    final navigationContext = context;
+
+    await showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => DineInEntryModal(
+        onConfirm: (tableInfo, partySize, customer) async {
+          if (!mounted) return;
+
+          if (mounted) {
+            Navigator.of(navigationContext).pop();
+          }
+
+          final tableId = tableInfo['tableId'] as String?;
+          if (tableId != null && tableId.isNotEmpty) {
+            final existingOrder = await _ordersService.getActiveOrderForTable(
+              tableId,
+            );
+            if (existingOrder != null) {
+              Navigator.pushNamed(
+                navigationContext,
+                '/dinein/new',
+                arguments: {
+                  'orderType': 'dineIn',
+                  'isEditMode': true,
+                  'order': existingOrder,
+                  'tableInfo': tableInfo,
+                },
+              );
+              return;
+            }
+          }
+
+          Navigator.pushNamed(
+            navigationContext,
+            '/dinein/new',
+            arguments: {
+              'orderType': 'dineIn',
+              'tableInfo': tableInfo,
+              'partySize': partySize,
+              'customer': customer,
+            },
+          );
+        },
+      ),
+    );
+  }
+
   void _openDashboardEditor() {
     // Filter out the "New Tile" item and items based on servicesOffered and permissions
     final editableItems = _dashboardItems.where((item) {
@@ -579,7 +811,9 @@ class _HomePageState extends State<HomePage> {
       // Filter Takeout based on pickUp or delivery service
       if (item.route == '/takeout' && !_isTakeoutEnabled) return false;
       // Filter Dine-In based on dineIn service AND floor_plans permission
-      if (item.route == '/dinein' &&
+      if ((item.route == '/dinein' ||
+              item.route == '#dinein_entry' ||
+              item.route == '#update_orders') &&
           (!_isDineInEnabled || !_hasFloorPlanPermission))
         return false;
       // Filter Cash Drawer based on cash_drawer permission
@@ -613,7 +847,9 @@ class _HomePageState extends State<HomePage> {
       // Filter Takeout based on pickUp or delivery service
       if (item.route == '/takeout' && !_isTakeoutEnabled) return false;
       // Filter Dine-In based on dineIn service AND floor_plans permission
-      if (item.route == '/dinein' &&
+      if ((item.route == '/dinein' ||
+              item.route == '#dinein_entry' ||
+              item.route == '#update_orders') &&
           (!_isDineInEnabled || !_hasFloorPlanPermission))
         return false;
       // Filter Cash Drawer based on cash_drawer permission
@@ -670,6 +906,22 @@ class _HomePageState extends State<HomePage> {
                           }
                           if (route == '#open_cash_drawer') {
                             _openCashDrawer();
+                            return;
+                          }
+                          if (route == '#dinein_entry') {
+                            _openDineInEntryFlow();
+                            return;
+                          }
+                          if (route == '#update_orders') {
+                            _promptForUpdateOrderTableNumber();
+                            return;
+                          }
+                          if (route == '/dinein') {
+                            Navigator.pushNamed(
+                              context,
+                              route,
+                              arguments: arguments,
+                            );
                             return;
                           }
                           if (arguments != null) {

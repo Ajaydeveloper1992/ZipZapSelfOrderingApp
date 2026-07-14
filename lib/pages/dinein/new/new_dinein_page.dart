@@ -179,6 +179,16 @@ class _NewDineInPageState extends State<NewDineInPage> {
         }
       }
 
+      // Handle a customer passed from the home-screen dine-in entry modal
+      if (args.containsKey('customer') && _selectedCustomer == null) {
+        final customerArg = args['customer'];
+        if (customerArg is Customer) {
+          setState(() {
+            _selectedCustomer = customerArg;
+          });
+        }
+      }
+
       // Handle edit mode
       if (args.containsKey('isEditMode') && args['isEditMode'] == true) {
         final order = args['order'] as order_model.Order?;
@@ -1232,8 +1242,16 @@ class _NewDineInPageState extends State<NewDineInPage> {
         // Create order via API
         final createdOrder = await _ordersService.createOrder(
           store: storeId,
-          customer: _selectedCustomer?.id,
-          phone: _selectedCustomer?.phone,
+          customer:
+              _selectedCustomer != null && _selectedCustomer!.id.isNotEmpty
+              ? _selectedCustomer!.id
+              : null,
+          phone:
+              _selectedCustomer != null &&
+                  _selectedCustomer!.phone != null &&
+                  _selectedCustomer!.phone!.isNotEmpty
+              ? _selectedCustomer!.phone
+              : null,
           orderType: orderType,
           paymentStatus: 'Pending', // Will be paid at checkout
           subtotal: subtotal,
@@ -1291,6 +1309,7 @@ class _NewDineInPageState extends State<NewDineInPage> {
           Navigator.of(context).pushNamedAndRemoveUntil(
             redirectRoute,
             (route) => route.settings.name == '/',
+            arguments: {'tableInfo': _tableInfo},
           );
         }
       } else {

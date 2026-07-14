@@ -37,6 +37,9 @@ class _DineInPageState extends State<DineInPage> {
   bool _isFetchingOrder = false;
   bool _hasFloorPlanPermission = false;
 
+  String? _selectedTableId;
+  String? _selectedFloorPlanId;
+
   @override
   void initState() {
     super.initState();
@@ -44,6 +47,21 @@ class _DineInPageState extends State<DineInPage> {
     _checkDineInAvailability();
     // Listen to WebSocket updates for floor plan and table status changes
     _webSocketProvider.addListener(_onWebSocketUpdate);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final args = ModalRoute.of(context)?.settings.arguments;
+    if (args is Map<String, dynamic>) {
+      if (args.containsKey('tableInfo')) {
+        final tableInfo = args['tableInfo'];
+        if (tableInfo is Map<String, dynamic>) {
+          _selectedTableId = tableInfo['tableId'] as String?;
+          _selectedFloorPlanId = tableInfo['floorPlanId'] as String?;
+        }
+      }
+    }
   }
 
   void _checkFloorPlanPermission() {
@@ -239,6 +257,14 @@ class _DineInPageState extends State<DineInPage> {
       setState(() {
         _floorPlans = response.floorPlans;
         _isLoading = false;
+        if (_selectedFloorPlanId != null) {
+          final selectedIndex = _floorPlans.indexWhere(
+            (plan) => plan.id == _selectedFloorPlanId,
+          );
+          if (selectedIndex != -1) {
+            _currentTabIndex = selectedIndex;
+          }
+        }
         // Reset index if needed
         if (_currentTabIndex >= _floorPlans.length) {
           _currentTabIndex = 0;
@@ -616,14 +642,15 @@ class _DineInPageState extends State<DineInPage> {
     return Column(
       children: [
         // Floor plan selector (segmented control)
-        if (_floorPlans.length > 1) _buildFloorPlanSelector(),
+        if (_floorPlans.length > 1 && _selectedTableId == null)
+          _buildFloorPlanSelector(),
 
         // Canvas
         Expanded(
           child: Padding(
             padding: const EdgeInsets.all(16),
             child: FloorPlanCanvas(
-              floorPlan: _floorPlans[_currentTabIndex],
+              floorPlan: _getVisibleFloorPlan(),
               onTableTap: _onTableTap,
             ),
           ),
@@ -720,10 +747,21 @@ class _DineInPageState extends State<DineInPage> {
     );
   }
 
+  FloorPlan _getVisibleFloorPlan() {
+    final plan = _floorPlans[_currentTabIndex];
+    if (_selectedTableId == null) return plan;
+
+    final filteredItems = plan.items
+        .where((item) => item.id == _selectedTableId)
+        .toList();
+    if (filteredItems.isEmpty) return plan;
+    return plan.copyWith(items: filteredItems);
+  }
+
   Widget _buildLegend() {
     if (_floorPlans.isEmpty) return const SizedBox.shrink();
 
-    final plan = _floorPlans[_currentTabIndex];
+    final plan = _getVisibleFloorPlan();
     final available = plan.items
         .where((i) => i.type.isTable && i.status == TableStatus.available)
         .length;
