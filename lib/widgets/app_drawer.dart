@@ -7,8 +7,6 @@ import 'package:zipzap_pos_self_orders/providers/data_provider.dart';
 import 'package:zipzap_pos_self_orders/widgets/auth_wrapper.dart';
 import 'package:zipzap_pos_self_orders/core/constants/api_constants.dart';
 import 'package:zipzap_pos_self_orders/widgets/app_toast.dart';
-import 'package:zipzap_pos_self_orders/core/services/time_clock_service.dart';
-import 'package:zipzap_pos_self_orders/widgets/pin_confirmation_dialog.dart';
 
 class AppDrawer extends StatefulWidget {
   const AppDrawer({super.key});
@@ -26,16 +24,12 @@ class _AppDrawerState extends State<AppDrawer> {
   bool _isTakeoutEnabled = true;
   bool _isDineInEnabled = true;
   bool _hasFloorPlanPermission = false;
-  final TimeClockService _timeClockService = TimeClockService();
-  String _clockStatus = '';
-
   @override
   void initState() {
     super.initState();
     _setupDataProviderListener();
     _loadStoreData();
     _updateFloorPlanPermission();
-    _loadClockStatus();
   }
 
   @override
@@ -82,19 +76,6 @@ class _AppDrawerState extends State<AppDrawer> {
     setState(() {
       _hasFloorPlanPermission = profile?.canReadFloorPlans ?? false;
     });
-  }
-
-  Future<void> _loadClockStatus() async {
-    try {
-      final entry = await _timeClockService.getStatus();
-      if (mounted) {
-        setState(() {
-          _clockStatus = entry?.status ?? '';
-        });
-      }
-    } catch (e) {
-      debugPrint('Error loading clock status: $e');
-    }
   }
 
   Future<void> _loadStoreData() async {
@@ -148,12 +129,6 @@ class _AppDrawerState extends State<AppDrawer> {
       {'title': 'Categories', 'icon': Icons.list, 'route': '/categories/list'},
       {'title': 'Customers', 'icon': Icons.people, 'route': '/customers'},
       {'title': 'Report', 'icon': Icons.description, 'route': '/report'},
-      {
-        'title': 'Time Clock',
-        'icon': Icons.access_time_rounded,
-        'route': '#time_clock',
-        'clockStatus': _clockStatus,
-      },
       {'title': 'Settings', 'icon': Icons.settings, 'route': '/settings'},
       {'title': 'My Account', 'icon': Icons.person, 'route': '/profile'},
       {'title': 'Printer Settings', 'icon': Icons.print, 'route': '/printers'},
@@ -192,14 +167,6 @@ class _AppDrawerState extends State<AppDrawer> {
 
   Future<void> _handleLogout(BuildContext context) async {
     try {
-      // Fetch fresh status from API to avoid stale in-memory state
-      await _timeClockService.getStatus();
-
-      if (_timeClockService.isClockedIn) {
-        final clockedOut = await _showClockOutGuard(context);
-        if (!clockedOut) return;
-      }
-
       // Show confirmation dialog
       final shouldLogout = await showDialog<bool>(
         context: context,
@@ -238,9 +205,6 @@ class _AppDrawerState extends State<AppDrawer> {
       final authService = AuthService();
       await authService.logout();
 
-      // Clear clock-in state
-      _timeClockService.clearStatus();
-
       // Navigate to root (AuthWrapper will show login page)
       if (context.mounted) {
         Navigator.of(context).pushAndRemoveUntil(
@@ -257,67 +221,6 @@ class _AppDrawerState extends State<AppDrawer> {
           description: 'Error during logout: $e',
         );
       }
-    }
-  }
-
-  /// Returns true if clock-out succeeded or was not needed.
-  Future<bool> _showClockOutGuard(BuildContext context) async {
-    final action = await showDialog<String>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        icon: Icon(
-          Icons.access_time_rounded,
-          size: 40,
-          color: Colors.orange.shade700,
-        ),
-        title: const Text('Clock Out Required'),
-        content: const Text(
-          'You are currently clocked in. Please clock out before logging out.',
-        ),
-        actionsAlignment: MainAxisAlignment.center,
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop('cancel'),
-            child: const Text('Cancel'),
-          ),
-          FilledButton.icon(
-            onPressed: () => Navigator.of(ctx).pop('clockout'),
-            icon: const Icon(Icons.logout, size: 18),
-            label: const Text('Clock Out'),
-          ),
-        ],
-      ),
-    );
-
-    if (action != 'clockout' || !context.mounted) return false;
-
-    final pin = await PinConfirmationDialog.show(
-      context,
-      title: 'Confirm Clock Out',
-      description: 'Enter your PIN to clock out',
-    );
-    if (pin == null || !context.mounted) return false;
-
-    final result = await _timeClockService.clockOut(pin: pin);
-    if (result.success) {
-      if (context.mounted) {
-        AppToast.success(
-          context: context,
-          title: 'Clocked Out',
-          description: result.message,
-        );
-      }
-      return true;
-    } else {
-      if (context.mounted) {
-        AppToast.error(
-          context: context,
-          title: 'Clock Out Failed',
-          description: result.message,
-        );
-      }
-      return false;
     }
   }
 
@@ -361,7 +264,6 @@ class _AppDrawerState extends State<AppDrawer> {
                   final route = item['route'] as String;
                   final arguments = item['arguments'] as Map<String, dynamic>?;
                   final isSelected = _isRouteActive(route, currentRoute);
-                  final clockStatus = item['clockStatus'] as String?;
                   return _buildMenuItem(
                     context,
                     title: item['title'] as String,
@@ -370,7 +272,6 @@ class _AppDrawerState extends State<AppDrawer> {
                     arguments: arguments,
                     isSelected: isSelected,
                     isLast: index == _menuItems.length - 1,
-                    clockStatus: clockStatus,
                   );
                 },
               ),
@@ -569,7 +470,6 @@ class _AppDrawerState extends State<AppDrawer> {
     Map<String, dynamic>? arguments,
     required bool isSelected,
     required bool isLast,
-    String? clockStatus,
   }) {
     final leftBorderWidth = 4.0;
     final horizontalPadding = 8.0;
@@ -583,9 +483,6 @@ class _AppDrawerState extends State<AppDrawer> {
         child: InkWell(
           onTap: () {
             Navigator.pop(context);
-            if (route == '#time_clock') {
-              return;
-            }
             if (route != '#') {
               if (arguments != null) {
                 Navigator.pushNamed(context, route, arguments: arguments);
@@ -665,18 +562,6 @@ class _AppDrawerState extends State<AppDrawer> {
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
-                if (clockStatus != null && clockStatus.isNotEmpty)
-                  Container(
-                    width: 8,
-                    height: 8,
-                    margin: const EdgeInsets.only(left: 6),
-                    decoration: BoxDecoration(
-                      color: clockStatus == 'on_break'
-                          ? Colors.amber.shade600
-                          : Colors.green.shade600,
-                      shape: BoxShape.circle,
-                    ),
-                  ),
               ],
             ),
           ),

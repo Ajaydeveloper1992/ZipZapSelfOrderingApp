@@ -1,12 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:zipzap_pos_self_orders/core/services/auth_service.dart';
 import 'package:zipzap_pos_self_orders/core/services/websocket_service.dart';
-import 'package:zipzap_pos_self_orders/core/services/time_clock_service.dart';
 import 'package:zipzap_pos_self_orders/core/constants/api_constants.dart';
 import 'package:zipzap_pos_self_orders/providers/data_provider.dart';
 import 'package:zipzap_pos_self_orders/widgets/auth_wrapper.dart';
 import 'package:zipzap_pos_self_orders/widgets/app_toast.dart';
-import 'package:zipzap_pos_self_orders/widgets/pin_confirmation_dialog.dart';
 
 class HeaderUserDropdown extends StatelessWidget {
   final String? userName;
@@ -38,16 +36,6 @@ class HeaderUserDropdown extends StatelessWidget {
 
   Future<void> _handleLogout(BuildContext context) async {
     try {
-      final timeClockService = TimeClockService();
-
-      // Fetch fresh status from API to avoid stale in-memory state
-      await timeClockService.getStatus();
-
-      if (timeClockService.isClockedIn) {
-        final clockedOut = await _showClockOutGuard(context, timeClockService);
-        if (!clockedOut) return;
-      }
-
       // Show confirmation dialog
       final shouldLogout = await showDialog<bool>(
         context: context,
@@ -86,9 +74,6 @@ class HeaderUserDropdown extends StatelessWidget {
       final authService = AuthService();
       await authService.logout();
 
-      // Clear clock-in state
-      timeClockService.clearStatus();
-
       // Navigate to root (AuthWrapper will show login page)
       if (context.mounted) {
         Navigator.of(context).pushAndRemoveUntil(
@@ -108,68 +93,6 @@ class HeaderUserDropdown extends StatelessWidget {
     }
   }
 
-  Future<bool> _showClockOutGuard(
-    BuildContext context,
-    TimeClockService timeClockService,
-  ) async {
-    final action = await showDialog<String>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        icon: Icon(
-          Icons.access_time_rounded,
-          size: 40,
-          color: Colors.orange.shade700,
-        ),
-        title: const Text('Clock Out Required'),
-        content: const Text(
-          'You are currently clocked in. Please clock out before logging out.',
-        ),
-        actionsAlignment: MainAxisAlignment.center,
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop('cancel'),
-            child: const Text('Cancel'),
-          ),
-          FilledButton.icon(
-            onPressed: () => Navigator.of(ctx).pop('clockout'),
-            icon: const Icon(Icons.logout, size: 18),
-            label: const Text('Clock Out'),
-          ),
-        ],
-      ),
-    );
-
-    if (action != 'clockout' || !context.mounted) return false;
-
-    final pin = await PinConfirmationDialog.show(
-      context,
-      title: 'Confirm Clock Out',
-      description: 'Enter your PIN to clock out',
-    );
-    if (pin == null || !context.mounted) return false;
-
-    final result = await timeClockService.clockOut(pin: pin);
-    if (result.success) {
-      if (context.mounted) {
-        AppToast.success(
-          context: context,
-          title: 'Clocked Out',
-          description: result.message,
-        );
-      }
-      return true;
-    } else {
-      if (context.mounted) {
-        AppToast.error(
-          context: context,
-          title: 'Clock Out Failed',
-          description: result.message,
-        );
-      }
-      return false;
-    }
-  }
 
   Widget _buildAvatar(BuildContext context, String? avatar, String fullName) {
     return Container(

@@ -886,14 +886,14 @@ class _CartDrawerState extends State<CartDrawer> {
                 Wrap(
                   spacing: 4,
                   children: [
-                    // _buildActionButton(
-                    //   context,
-                    //   'Note',
-                    //   widget.onNoteUpdate != null
-                    //       ? () => _showNoteModal(context)
-                    //       : widget.onNoteTap,
-                    //   isActive: widget.cartData?.note?.isNotEmpty ?? false,
-                    // ),
+                    _buildActionButton(
+                      context,
+                      'Note',
+                      widget.onNoteUpdate != null
+                          ? () => _showNoteModal(context)
+                          : widget.onNoteTap,
+                      isActive: widget.cartData?.note?.isNotEmpty ?? false,
+                    ),
                     // _buildActionButton(
                     //   context,
                     //   'Discount',
@@ -915,64 +915,64 @@ class _CartDrawerState extends State<CartDrawer> {
                     //     'Contact',
                     //     () => _showContactModal(context),
                     //   ),
-                    _buildActionButton(
-                      context,
-                      'Add Item',
-                      widget.onAddItemTap,
-                      isActive: widget.cartData?.fees.isNotEmpty ?? false,
-                    ),
+                    // _buildActionButton(
+                    //   context,
+                    //   'Add Item',
+                    //   widget.onAddItemTap,
+                    //   isActive: widget.cartData?.fees.isNotEmpty ?? false,
+                    // ),
                   ],
                 ),
               ],
             ),
           ),
           // Summary Rows
-          _buildSummaryRow(context, 'Sub Total:', _subtotal),
-          if (widget.cartData?.fees.isNotEmpty ?? false)
-            _buildSummaryRow(context, 'Fee:', _feeAmount, isPositive: true),
-          if (widget.cartData?.discount != null &&
-              widget.cartData!.discount!.value != 0)
-            _buildSummaryRow(
-              context,
-              'Discount${widget.cartData?.discount?.type == '%' ? ' (${widget.cartData!.discount!.value % 1 == 0 ? widget.cartData!.discount!.value.toInt() : widget.cartData!.discount!.value}%)' : ''}:',
-              _discountAmount,
-              isDiscount: true,
-              onRemove: widget.onDiscountUpdate != null
-                  ? () {
-                      widget.onDiscountUpdate!(null);
-                    }
-                  : null,
-            ),
-          if (widget.cartData?.coupon?.code.isNotEmpty ?? false)
-            _buildSummaryRow(
-              context,
-              'Coupon:',
-              _couponAmount,
-              isDiscount: true,
-            ),
-          if (_tax > 0)
-            _buildSummaryRow(context, 'Tax:', _tax, isPositive: true),
+          // _buildSummaryRow(context, 'Sub Total:', _subtotal),
+          // if (widget.cartData?.fees.isNotEmpty ?? false)
+          //   _buildSummaryRow(context, 'Fee:', _feeAmount, isPositive: true),
+          // if (widget.cartData?.discount != null &&
+          //     widget.cartData!.discount!.value != 0)
+          //   _buildSummaryRow(
+          //     context,
+          //     'Discount${widget.cartData?.discount?.type == '%' ? ' (${widget.cartData!.discount!.value % 1 == 0 ? widget.cartData!.discount!.value.toInt() : widget.cartData!.discount!.value}%)' : ''}:',
+          //     _discountAmount,
+          //     isDiscount: true,
+          //     onRemove: widget.onDiscountUpdate != null
+          //         ? () {
+          //             widget.onDiscountUpdate!(null);
+          //           }
+          //         : null,
+          //   ),
+          // if (widget.cartData?.coupon?.code.isNotEmpty ?? false)
+          //   _buildSummaryRow(
+          //     context,
+          //     'Coupon:',
+          //     _couponAmount,
+          //     isDiscount: true,
+          //   ),
+          // if (_tax > 0)
+          //   _buildSummaryRow(context, 'Tax:', _tax, isPositive: true),
           // Total Row
-          Container(
-            padding: const EdgeInsets.only(left: 12, right: 12, bottom: 8),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text(
-                  'Total:',
-                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
-                ),
-                Text(
-                  '\$${_total.toStringAsFixed(2)}',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: Theme.of(context).colorScheme.primary,
-                  ),
-                ),
-              ],
-            ),
-          ),
+          // Container(
+          //   padding: const EdgeInsets.only(left: 12, right: 12, bottom: 8),
+          //   child: Row(
+          //     mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          //     children: [
+          //       const Text(
+          //         'Total:',
+          //         style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+          //       ),
+          //       Text(
+          //         '\$${_total.toStringAsFixed(2)}',
+          //         style: TextStyle(
+          //           fontSize: 16,
+          //           fontWeight: FontWeight.bold,
+          //           color: Theme.of(context).colorScheme.primary,
+          //         ),
+          //       ),
+          //     ],
+          //   ),
+          // ),
           // Action Buttons Row
           SizedBox(
             height: 42,

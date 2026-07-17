@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:zipzap_pos_self_orders/core/services/auth_service.dart';
 import 'package:zipzap_pos_self_orders/models/customer_model.dart';
 import 'package:zipzap_pos_self_orders/models/floor_plan_model.dart';
 import 'package:zipzap_pos_self_orders/services/floor_plans_service.dart';
@@ -37,7 +38,18 @@ class DineInEntryModal extends StatefulWidget {
   )
   onConfirm;
 
-  const DineInEntryModal({super.key, required this.onConfirm});
+  // Optional initial values (per-staff defaults)
+  final String? initialTableNumber;
+  final String? initialGuestCount;
+  final String? initialCustomerName;
+
+  const DineInEntryModal({
+    super.key,
+    required this.onConfirm,
+    this.initialTableNumber,
+    this.initialGuestCount,
+    this.initialCustomerName,
+  });
 
   @override
   State<DineInEntryModal> createState() => _DineInEntryModalState();
@@ -51,13 +63,45 @@ class _DineInEntryModalState extends State<DineInEntryModal> {
 
   bool _isSubmitting = false;
   String? _errorText;
+  String? _assignedTableName;
+  late int _guestCount;
 
+  static const Color _primaryTeal = Color(0xFF006B5F);
+  static const Color _lightTealBg = Color(0xFFD8F0ED);
   @override
   void dispose() {
     _tableController.dispose();
     _guestController.dispose();
     _customerController.dispose();
     super.dispose();
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    // Apply any initial values passed from caller
+    if (widget.initialTableNumber != null) {
+      _tableController.text = widget.initialTableNumber!;
+      _assignedTableName = widget.initialTableNumber;
+    }
+    if (widget.initialGuestCount != null) {
+      _guestController.text = widget.initialGuestCount!;
+      _guestCount = int.tryParse(widget.initialGuestCount!) ?? 1;
+    } else {
+      _guestCount = 1;
+    }
+    if (widget.initialCustomerName != null) {
+      _customerController.text = widget.initialCustomerName!;
+    }
+  }
+
+  void _updateGuestCount(int value) {
+    if (value > 0) {
+      setState(() {
+        _guestCount = value;
+        _guestController.text = value.toString();
+      });
+    }
   }
 
   Future<void> _handleConfirm() async {
@@ -143,6 +187,31 @@ class _DineInEntryModalState extends State<DineInEntryModal> {
         partySize,
         customer,
       );
+      // Save last-used values to preferences for the logged-in staff
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        // Try to store per-user if profile available
+        try {
+          final authService = AuthService();
+          final username = authService.getProfile()?.username;
+          if (username != null && username.isNotEmpty) {
+            await prefs.setString('last_table_number_$username', tableNumber);
+            await prefs.setString('last_guest_count_$username', guestCount);
+            await prefs.setString('last_customer_name_$username', customerName);
+          } else {
+            await prefs.setString('last_table_number', tableNumber);
+            await prefs.setString('last_guest_count', guestCount);
+            await prefs.setString('last_customer_name', customerName);
+          }
+        } catch (_) {
+          // fallback to generic keys
+          await prefs.setString('last_table_number', tableNumber);
+          await prefs.setString('last_guest_count', guestCount);
+          await prefs.setString('last_customer_name', customerName);
+        }
+      } catch (_) {
+        // ignore prefs errors
+      }
     } catch (e) {
       if (mounted) {
         setState(() {
@@ -160,122 +229,403 @@ class _DineInEntryModalState extends State<DineInEntryModal> {
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
+    final authService = AuthService();
+    final profile = authService.getProfile();
+    final staffName = profile?.username ?? 'Staff';
+    final staffEmail = profile?.email ?? 'admin@promehedi.com';
+
+    return Dialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      titlePadding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
-      contentPadding: const EdgeInsets.fromLTRB(24, 12, 24, 24),
-      title: const Text('Start Dine-In Order'),
-      content: SizedBox(
-        width: 420,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Enter the table details below to start a new dine-in order.',
-              style: TextStyle(color: Colors.black54),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: _tableController,
-              textInputAction: TextInputAction.next,
-              decoration: const InputDecoration(
-                labelText: 'Table Number',
-                border: OutlineInputBorder(),
-                prefixIcon: Icon(Icons.table_restaurant),
+      child: SingleChildScrollView(
+        child: Container(
+          width: 480,
+          padding: const EdgeInsets.all(28),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Header
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Order Now Details Ajay',
+                        style: TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.black87,
+                        ),
+                      ),
+                      if (_assignedTableName != null) ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          _assignedTableName!,
+                          style: const TextStyle(
+                            fontSize: 13,
+                            color: Colors.grey,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                  GestureDetector(
+                    onTap: () => Navigator.pop(context),
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: Colors.red.shade100,
+                        shape: BoxShape.circle,
+                      ),
+                      padding: const EdgeInsets.all(8),
+                      child: Icon(
+                        Icons.close,
+                        color: Colors.red.shade700,
+                        size: 20,
+                      ),
+                    ),
+                  ),
+                ],
               ),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _guestController,
-              keyboardType: TextInputType.number,
-              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-              textInputAction: TextInputAction.next,
-              decoration: const InputDecoration(
-                labelText: 'Guest Count',
-                border: OutlineInputBorder(),
-                prefixIcon: Icon(Icons.people),
-              ),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _customerController,
-              textInputAction: TextInputAction.done,
-              decoration: const InputDecoration(
-                labelText: 'Customer Name',
-                border: OutlineInputBorder(),
-                prefixIcon: Icon(Icons.person),
-              ),
-              onSubmitted: (_) => _handleConfirm(),
-            ),
-            if (_errorText != null) ...[
-              const SizedBox(height: 12),
+              const SizedBox(height: 28),
+
+              // Guest Count - Large Container
               Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: Colors.red.shade50,
-                  borderRadius: BorderRadius.circular(8),
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(
+                  vertical: 28,
+                  horizontal: 20,
                 ),
-                child: Row(
+                decoration: BoxDecoration(
+                  color: _lightTealBg,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: Colors.grey.shade300, width: 1.5),
+                ),
+                child: Column(
                   children: [
-                    Icon(Icons.error_outline, color: Colors.red.shade700),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        _errorText!,
-                        style: TextStyle(color: Colors.red.shade700),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        GestureDetector(
+                          onTap: _guestCount > 1
+                              ? () => _updateGuestCount(_guestCount - 1)
+                              : null,
+                          child: Container(
+                            width: 56,
+                            height: 56,
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(12),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withValues(alpha: 0.08),
+                                  blurRadius: 6,
+                                  offset: const Offset(0, 2),
+                                ),
+                              ],
+                            ),
+                            child: Icon(
+                              Icons.remove,
+                              color: _guestCount > 1
+                                  ? _primaryTeal
+                                  : Colors.grey.shade300,
+                              size: 26,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 48),
+                        Text(
+                          _guestCount.toString(),
+                          style: const TextStyle(
+                            fontSize: 56,
+                            fontWeight: FontWeight.bold,
+                            color: _primaryTeal,
+                          ),
+                        ),
+                        const SizedBox(width: 48),
+                        GestureDetector(
+                          onTap: () => _updateGuestCount(_guestCount + 1),
+                          child: Container(
+                            width: 56,
+                            height: 56,
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(12),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withValues(alpha: 0.08),
+                                  blurRadius: 6,
+                                  offset: const Offset(0, 2),
+                                ),
+                              ],
+                            ),
+                            child: const Icon(
+                              Icons.add,
+                              color: _primaryTeal,
+                              size: 26,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    const Text(
+                      'Guest',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Colors.grey,
+                        fontWeight: FontWeight.w500,
                       ),
                     ),
                   ],
                 ),
               ),
-            ],
-            const SizedBox(height: 20),
-            LayoutBuilder(
-              builder: (context, constraints) {
-                final useVertical = constraints.maxWidth < 380;
-                final cancelButton = TextButton(
-                  onPressed: _isSubmitting
-                      ? null
-                      : () => Navigator.of(context).pop(),
-                  child: const Text('Cancel'),
-                );
-                final continueButton = FilledButton.icon(
-                  onPressed: _isSubmitting ? null : _handleConfirm,
-                  icon: _isSubmitting
-                      ? const SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Icon(Icons.arrow_forward),
-                  label: Text(_isSubmitting ? 'Checking...' : 'Continue'),
-                );
+              const SizedBox(height: 24),
 
-                if (useVertical) {
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      cancelButton,
-                      const SizedBox(height: 12),
-                      continueButton,
-                    ],
-                  );
-                }
-
-                return Row(
+              // Server
+              const Text(
+                'Server',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.grey,
+                ),
+              ),
+              const SizedBox(height: 10),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 12,
+                ),
+                decoration: BoxDecoration(
+                  border: Border.all(color: Colors.grey.shade300),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
                   children: [
-                    Expanded(child: cancelButton),
+                    Container(
+                      width: 44,
+                      height: 44,
+                      decoration: BoxDecoration(
+                        color: _lightTealBg,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Center(
+                        child: Text(
+                          staffName.substring(0, 2).toUpperCase(),
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: _primaryTeal,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ),
+                    ),
                     const SizedBox(width: 12),
-                    Expanded(child: continueButton),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            staffName,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w600,
+                              fontSize: 14,
+                            ),
+                          ),
+                          Text(
+                            staffEmail,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey.shade600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   ],
-                );
-              },
-            ),
-          ],
+                ),
+              ),
+              const SizedBox(height: 24),
+
+              // Quick Select
+              const Text(
+                'Quick Select',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.grey,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                children: [1, 2, 3, 4, 5, 8, 10, 20]
+                    .map(
+                      (count) => GestureDetector(
+                        onTap: () => _updateGuestCount(count),
+                        child: Container(
+                          width: 54,
+                          height: 54,
+                          decoration: BoxDecoration(
+                            color: _guestCount == count
+                                ? _primaryTeal
+                                : Colors.white,
+                            border: Border.all(
+                              color: _guestCount == count
+                                  ? _primaryTeal
+                                  : Colors.grey.shade300,
+                              width: 2,
+                            ),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Center(
+                            child: Text(
+                              count.toString(),
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 15,
+                                color: _guestCount == count
+                                    ? Colors.white
+                                    : Colors.grey.shade700,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    )
+                    .toList(),
+              ),
+              const SizedBox(height: 24),
+
+              // Customer Name
+              TextField(
+                controller: _customerController,
+                decoration: InputDecoration(
+                  hintText: 'Customer Name',
+                  prefixIcon: const Icon(Icons.person, size: 20),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(color: Colors.grey.shade300),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(color: Colors.grey.shade300),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: _primaryTeal, width: 2),
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 14,
+                  ),
+                ),
+              ),
+
+              if (_errorText != null) ...[
+                const SizedBox(height: 16),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.red.shade50,
+                    border: Border.all(color: Colors.red.shade200),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.error_outline,
+                        color: Colors.red.shade700,
+                        size: 18,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          _errorText!,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.red.shade700,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+              const SizedBox(height: 28),
+
+              // Buttons
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: _isSubmitting
+                          ? null
+                          : () => Navigator.pop(context),
+                      style: OutlinedButton.styleFrom(
+                        side: BorderSide(color: Colors.red.shade400, width: 2),
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      icon: Icon(
+                        Icons.close,
+                        color: Colors.red.shade600,
+                        size: 18,
+                      ),
+                      label: Text(
+                        'Cancel',
+                        style: TextStyle(
+                          color: Colors.red.shade600,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 15,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: FilledButton.icon(
+                      onPressed: _isSubmitting ? null : _handleConfirm,
+                      style: FilledButton.styleFrom(
+                        backgroundColor: _primaryTeal,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      icon: _isSubmitting
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                valueColor: AlwaysStoppedAnimation<Color>(
+                                  Colors.white,
+                                ),
+                              ),
+                            )
+                          : const Icon(Icons.check, size: 18),
+                      label: Text(
+                        _isSubmitting ? 'Confirming...' : 'Confirm Order',
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 15,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
-      actions: [],
     );
   }
 }

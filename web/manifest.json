@@ -1,6 +1,6 @@
 {
-    "name": "zipzap",
-    "short_name": "zipzap",
+    "name": "zipzap selforder",
+    "short_name": "zipzap selforder",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",

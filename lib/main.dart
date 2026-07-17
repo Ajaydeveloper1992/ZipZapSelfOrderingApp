@@ -1,6 +1,5 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_native_splash/flutter_native_splash.dart';
 import 'package:toastification/toastification.dart';
@@ -22,6 +21,7 @@ import 'package:zipzap_pos_self_orders/pages/categories/list/categories_page.dar
 import 'package:zipzap_pos_self_orders/pages/profile/profile_page.dart';
 import 'package:zipzap_pos_self_orders/pages/dinein/dinein_page.dart';
 import 'package:zipzap_pos_self_orders/pages/dinein/new/new_dinein_page.dart';
+import 'package:zipzap_pos_self_orders/core/constants/app_constants.dart';
 import 'package:zipzap_pos_self_orders/utils/timezone_utils.dart';
 
 // Global navigator key for app-wide navigation (e.g., auto-logout on 401)
@@ -29,11 +29,6 @@ final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 void main() async {
   WidgetsBinding widgetsBinding = WidgetsFlutterBinding.ensureInitialized();
-
-  // Enable fullscreen mode (immersive sticky)
-  // This hides system bars (status bar and navigation bar)
-  // Swipe from edges to show them temporarily
-  await SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
 
   // Preserve native splash screen while app initializes
   if (!kIsWeb) {
@@ -69,7 +64,7 @@ class MainApp extends StatelessWidget {
     return ToastificationWrapper(
       child: MaterialApp(
         navigatorKey: navigatorKey,
-        title: 'zipzap_pos_self_orders',
+        title: AppConstants.appName,
         debugShowCheckedModeBanner: false,
         theme: ThemeData(
           colorScheme: ColorScheme.fromSeed(

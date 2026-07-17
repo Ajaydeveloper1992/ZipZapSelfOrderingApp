@@ -1,7 +1,8 @@
-package com.example.zipzap
+package com.zipzap.selforder
 
 import android.os.Bundle
 import io.flutter.embedding.android.FlutterActivity
+import io.flutter.embedding.android.RenderMode
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 
@@ -11,6 +12,10 @@ class MainActivity : FlutterActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+    }
+
+    override fun getRenderMode(): RenderMode {
+        return RenderMode.texture
     }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {

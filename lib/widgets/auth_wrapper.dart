@@ -2,14 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_native_splash/flutter_native_splash.dart';
 import 'package:zipzap_pos_self_orders/core/services/auth_service.dart';
 import 'package:zipzap_pos_self_orders/core/services/http_service.dart';
-import 'package:zipzap_pos_self_orders/core/services/time_clock_service.dart';
 import 'package:zipzap_pos_self_orders/main.dart' show navigatorKey;
 import 'package:zipzap_pos_self_orders/pages/auth/login_page.dart';
 import 'package:zipzap_pos_self_orders/pages/home/home_page.dart';
 import 'package:zipzap_pos_self_orders/providers/websocket_provider.dart';
 import 'package:zipzap_pos_self_orders/providers/data_provider.dart';
 import 'package:zipzap_pos_self_orders/widgets/splash_screen.dart';
-import 'package:zipzap_pos_self_orders/widgets/pin_confirmation_dialog.dart';
 import 'package:zipzap_pos_self_orders/services/app_update_service.dart';
 
 class AuthWrapper extends StatefulWidget {
@@ -50,7 +48,6 @@ class _AuthWrapperState extends State<AuthWrapper> {
     // Logout and disconnect
     _authService.logout();
     _webSocketProvider.disconnect();
-    TimeClockService().clearStatus();
 
     // Use post-frame callback to ensure UI is ready
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -197,72 +194,7 @@ class _AuthWrapperState extends State<AuthWrapper> {
     // showing the clock-in prompt (progress dialog has a 300ms close delay)
     await Future.delayed(const Duration(milliseconds: 500));
 
-    // Check time clock status and prompt for clock-in if needed
-    if (mounted && storeId != null) {
-      _checkClockInStatus(storeId);
-    }
-  }
-
-  Future<void> _checkClockInStatus(String storeId) async {
-    try {
-      final timeClockService = TimeClockService();
-      final entry = await timeClockService.getStatus();
-
-      if (entry != null && entry.isClockedIn) {
-        debugPrint('Already clocked in, skipping prompt');
-        return;
-      }
-
-      if (!mounted) return;
-
-      final shouldClockIn = await showDialog<bool>(
-        context: context,
-        barrierDismissible: true,
-        builder: (ctx) => AlertDialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
-          icon: Icon(
-            Icons.access_time_rounded,
-            size: 40,
-            color: Theme.of(ctx).colorScheme.primary,
-          ),
-          title: const Text('Clock In'),
-          content: const Text('Would you like to clock in for your shift?'),
-          actionsAlignment: MainAxisAlignment.center,
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(ctx).pop(false),
-              child: const Text('Skip'),
-            ),
-            FilledButton.icon(
-              onPressed: () => Navigator.of(ctx).pop(true),
-              icon: const Icon(Icons.login, size: 18),
-              label: const Text('Clock In'),
-            ),
-          ],
-        ),
-      );
-
-      if (shouldClockIn == true && mounted) {
-        final pin = await PinConfirmationDialog.show(
-          context,
-          title: 'Confirm Clock In',
-          description: 'Enter your PIN to clock in',
-        );
-        if (pin != null && mounted) {
-          final result = await timeClockService.clockIn(
-            storeId: storeId,
-            pin: pin,
-          );
-          debugPrint(
-            'Clock in result: success=${result.success}, message=${result.message}',
-          );
-        }
-      }
-    } catch (e) {
-      debugPrint('Error checking clock-in status: $e');
-    }
+    // Clock in/out is disabled in this app version.
   }
 
   @override

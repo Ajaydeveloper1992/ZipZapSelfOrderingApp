@@ -726,16 +726,7 @@ class DataProvider extends ChangeNotifier {
         final isWebOrder = order.origin == 'AI' || order.origin == 'WEB';
 
         if (isPending && isWebOrder) {
-          // Show notification for this new web order
-          _notificationService.showNewWebOrderNotification(
-            orderNumber: order.orderNumber,
-            customerName: order.customer?.fullName ?? 'Guest',
-            totalAmount: order.total,
-            origin: order.origin,
-          );
-
-          debugPrint('🔔 New web order notification: #${order.orderNumber}');
-          hasNewWebOrder = true;
+          debugPrint('🔕 Order notifications are disabled for #${order.orderNumber}');
         }
 
         // Add to seen orders

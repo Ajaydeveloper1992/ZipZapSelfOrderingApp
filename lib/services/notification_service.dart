@@ -9,6 +9,7 @@ class NotificationService {
   final FlutterLocalNotificationsPlugin _notifications =
       FlutterLocalNotificationsPlugin();
 
+  bool notificationsEnabled = false;
   bool _isInitialized = false;
 
   /// Initialize the notification service
@@ -23,9 +24,9 @@ class NotificationService {
 
       // iOS settings
       const iosSettings = DarwinInitializationSettings(
-        requestAlertPermission: true,
-        requestBadgePermission: true,
-        requestSoundPermission: true,
+        requestAlertPermission: false,
+        requestBadgePermission: false,
+        requestSoundPermission: false,
       );
 
       const initSettings = InitializationSettings(
@@ -43,8 +44,8 @@ class NotificationService {
         _isInitialized = true;
         debugPrint('✅ Notification service initialized successfully');
 
-        // Request permissions for iOS
-        if (defaultTargetPlatform == TargetPlatform.iOS) {
+        // Only request iOS permissions when notifications are enabled
+        if (notificationsEnabled && defaultTargetPlatform == TargetPlatform.iOS) {
           await _requestIOSPermissions();
         }
       } else {
@@ -57,6 +58,8 @@ class NotificationService {
 
   /// Request iOS permissions
   Future<void> _requestIOSPermissions() async {
+    if (!notificationsEnabled) return;
+
     await _notifications
         .resolvePlatformSpecificImplementation<
           IOSFlutterLocalNotificationsPlugin
@@ -77,6 +80,11 @@ class NotificationService {
     required double totalAmount,
     String? origin,
   }) async {
+    if (!notificationsEnabled) {
+      debugPrint('🔕 Order notifications are disabled');
+      return;
+    }
+
     if (!_isInitialized) {
       debugPrint('⚠️ Notification service not initialized');
       return;

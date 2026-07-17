@@ -9,13 +9,21 @@ class AudioService {
   final AudioPlayer _notificationPlayer = AudioPlayer();
   final AudioPlayer _effectPlayer = AudioPlayer();
 
+  bool soundEnabled = false;
   bool _isNotificationLoopPlaying = false;
   bool _isInitialized = false;
-  bool _userInteracted = false; // Track if user has interacted (for web autoplay)
+  bool _userInteracted =
+      false; // Track if user has interacted (for web autoplay)
 
   /// Initialize the audio service
   Future<void> initialize() async {
     if (_isInitialized) return;
+
+    if (!soundEnabled) {
+      _isInitialized = true;
+      debugPrint('🔇 Audio service initialized with sound disabled');
+      return;
+    }
 
     try {
       // Set up notification player for looping
@@ -58,8 +66,15 @@ class AudioService {
 
   /// Play notification sound in loop (for pending web orders)
   Future<void> playNotificationLoop() async {
+    if (!soundEnabled) {
+      debugPrint('🔇 Notification sound loop is disabled');
+      return;
+    }
+
     if (!_isInitialized) {
-      debugPrint('⚠️ Audio service not initialized, attempting to initialize...');
+      debugPrint(
+        '⚠️ Audio service not initialized, attempting to initialize...',
+      );
       await initialize();
       if (!_isInitialized) return;
     }
@@ -164,6 +179,11 @@ class AudioService {
 
   /// Play a sound effect (one-time, not looped)
   Future<void> _playSoundEffect(String soundPath) async {
+    if (!soundEnabled) {
+      debugPrint('🔇 Sound effects are disabled');
+      return;
+    }
+
     if (!_isInitialized) {
       debugPrint('⚠️ Audio service not initialized');
       return;

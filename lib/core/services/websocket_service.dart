@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
+import 'package:web_socket_channel/io.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:zipzap_pos_self_orders/core/constants/api_constants.dart';
 
@@ -143,6 +144,32 @@ class WebSocketService {
     return delay + jitter;
   }
 
+  void _scheduleReconnect({String? userId, String? storeId}) {
+    _reconnectAttempts++;
+
+    if (!autoReconnect ||
+        _reconnectAttempts >= maxReconnectAttempts ||
+        _hasReachedMaxAttempts) {
+      _hasReachedMaxAttempts = true;
+      _isServerDown = true;
+      debugPrint(
+        'Max reconnection attempts ($maxReconnectAttempts) reached. Server appears to be down.',
+      );
+      _startServerRecoveryCheck();
+      return;
+    }
+
+    final delay = _getReconnectDelay();
+    debugPrint(
+      'Attempting to reconnect in ${(delay / 1000).round()}s ($_reconnectAttempts/$maxReconnectAttempts)...',
+    );
+
+    _reconnectTimer?.cancel();
+    _reconnectTimer = Timer(Duration(milliseconds: delay), () {
+      connect(userId: userId ?? _lastUserId, storeId: storeId ?? _lastStoreId);
+    });
+  }
+
   // Send ping to server
   void _sendPing() {
     if (_channel != null && _isConnected) {
@@ -159,7 +186,8 @@ class WebSocketService {
         _pingTimeoutTimer = Timer(Duration(milliseconds: pingTimeout), () {
           debugPrint('Ping timeout - no pong response received');
           _isServerDown = true;
-          disconnect(clearCredentials: false);
+          _status = WebSocketStatus.error;
+          disconnect(clearCredentials: false, preserveServerDown: true);
         });
       } catch (error) {
         debugPrint('Error sending ping: $error');
@@ -218,10 +246,14 @@ class WebSocketService {
       // Ensure message controller is initialized before connecting
       _ensureMessageController();
 
-      _channel = WebSocketChannel.connect(uri);
+      final channel = IOWebSocketChannel.connect(
+        uri,
+        connectTimeout: const Duration(seconds: 10),
+      );
+      _channel = channel;
 
       // Set up message listener (similar to ws.onmessage in Next.js)
-      _channel!.stream.listen(
+      channel.stream.listen(
         (message) {
           debugPrint('WebSocket RAW message received: $message');
           try {
@@ -257,46 +289,18 @@ class WebSocketService {
           _stopPingInterval();
           _isReconnecting = false;
 
-          // Increment reconnect attempts
-          _reconnectAttempts++;
-
-          // Attempt to reconnect if auto-reconnect is enabled
-          if (autoReconnect &&
-              _reconnectAttempts <= maxReconnectAttempts &&
-              !_hasReachedMaxAttempts) {
-            final delay = _getReconnectDelay();
-            debugPrint(
-              'Attempting to reconnect in ${(delay / 1000).round()}s ($_reconnectAttempts/$maxReconnectAttempts)...',
-            );
-
-            _reconnectTimer?.cancel();
-            _reconnectTimer = Timer(Duration(milliseconds: delay), () {
-              if (_reconnectAttempts >= maxReconnectAttempts) {
-                _hasReachedMaxAttempts = true;
-                _isServerDown = true;
-                debugPrint(
-                  'Max reconnection attempts reached. Server appears to be down.',
-                );
-                _startServerRecoveryCheck();
-                return;
-              }
-              connect(userId: effectiveUserId, storeId: effectiveStoreId);
-            });
-          } else {
-            _hasReachedMaxAttempts = true;
-            _isServerDown = true;
-            debugPrint(
-              'Max reconnection attempts ($maxReconnectAttempts) reached. Server appears to be down.',
-            );
-            _startServerRecoveryCheck();
-          }
+          _scheduleReconnect(
+            userId: effectiveUserId,
+            storeId: effectiveStoreId,
+          );
         },
         cancelOnError: false,
       );
 
-      // Connection opened (similar to ws.onopen in Next.js)
-      // Note: WebSocketChannel.connect() connects immediately, but we need to wait
-      // a bit to ensure the connection is fully established before sending auth
+      // Wait until the socket handshake has really completed before marking
+      // the app connected or sending ping/auth messages.
+      await channel.ready;
+
       _status = WebSocketStatus.connected;
       _isConnected = true;
       _isServerDown = false;
@@ -462,7 +466,10 @@ class WebSocketService {
   }
 
   // Disconnect from WebSocket
-  void disconnect({bool clearCredentials = true}) {
+  void disconnect({
+    bool clearCredentials = true,
+    bool preserveServerDown = false,
+  }) {
     _stopPingInterval();
     _stopServerRecoveryCheck();
     _reconnectTimer?.cancel();
@@ -473,7 +480,9 @@ class WebSocketService {
 
     _status = WebSocketStatus.disconnected;
     _isConnected = false;
-    _isServerDown = false;
+    if (!preserveServerDown) {
+      _isServerDown = false;
+    }
     _reconnectAttempts = 0;
     _hasReachedMaxAttempts = false;
     _isReconnecting = false;

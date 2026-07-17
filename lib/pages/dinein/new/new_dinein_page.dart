@@ -164,8 +164,13 @@ class _NewDineInPageState extends State<NewDineInPage> {
 
       // Handle tableInfo for dine-in orders
       if (args.containsKey('tableInfo') && _tableInfo == null) {
+        final tableInfo = args['tableInfo'] as Map<String, dynamic>;
+        // Merge partySize into tableInfo if provided separately
+        if (args.containsKey('partySize')) {
+          tableInfo['partySize'] = args['partySize'] as int;
+        }
         setState(() {
-          _tableInfo = args['tableInfo'] as Map<String, dynamic>;
+          _tableInfo = tableInfo;
         });
       }
 
@@ -1239,13 +1244,36 @@ class _NewDineInPageState extends State<NewDineInPage> {
         // Send pickup time as ISO timestamp if available
         final delayTime = _selectedPickupTime?.toIso8601String();
 
+        // Create or retrieve customer if we have one
+        String? customerId;
+        if (_selectedCustomer != null) {
+          if (_selectedCustomer!.id.isEmpty) {
+            // Customer has no ID, so create them first
+            try {
+              final createdCustomer = await _customersService.createCustomer(
+                firstName: _selectedCustomer!.firstName,
+                lastName: _selectedCustomer!.lastName ?? '',
+                phone: _selectedCustomer!.phone,
+                email: _selectedCustomer!.email,
+              );
+              customerId = createdCustomer.id;
+              // Update the selected customer with the new ID
+              setState(() {
+                _selectedCustomer = createdCustomer;
+              });
+            } catch (e) {
+              debugPrint('Error creating customer: $e');
+              // Continue without customer if creation fails
+            }
+          } else {
+            customerId = _selectedCustomer!.id;
+          }
+        }
+
         // Create order via API
         final createdOrder = await _ordersService.createOrder(
           store: storeId,
-          customer:
-              _selectedCustomer != null && _selectedCustomer!.id.isNotEmpty
-              ? _selectedCustomer!.id
-              : null,
+          customer: customerId,
           phone:
               _selectedCustomer != null &&
                   _selectedCustomer!.phone != null &&

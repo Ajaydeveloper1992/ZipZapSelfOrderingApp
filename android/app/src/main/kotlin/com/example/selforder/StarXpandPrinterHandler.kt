@@ -1,4 +1,4 @@
-package com.example.zipzap
+﻿package com.zipzap.selforder
 
 import android.Manifest
 import android.app.Activity
@@ -1681,4 +1681,3 @@ class StarXpandPrinterHandler(private val context: Context) : MethodChannel.Meth
         coroutineScope.cancel()
     }
 }
-
