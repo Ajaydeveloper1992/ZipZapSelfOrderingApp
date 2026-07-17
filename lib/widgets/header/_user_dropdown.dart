@@ -93,7 +93,6 @@ class HeaderUserDropdown extends StatelessWidget {
     }
   }
 
-
   Widget _buildAvatar(BuildContext context, String? avatar, String fullName) {
     return Container(
       width: 32,
@@ -154,18 +153,18 @@ class HeaderUserDropdown extends StatelessWidget {
       onSelected: (value) => _handleMenuItemSelected(context, value),
       offset: const Offset(-2, 44),
       itemBuilder: (context) => [
-        PopupMenuItem(
-          value: 'printers',
-          height: 40,
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-          child: Row(
-            children: [
-              const Icon(Icons.print, size: 16),
-              const SizedBox(width: 8),
-              const Text('Printer Settings'),
-            ],
-          ),
-        ),
+        // PopupMenuItem(
+        //   value: 'printers',
+        //   height: 40,
+        //   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+        //   child: Row(
+        //     children: [
+        //       const Icon(Icons.print, size: 16),
+        //       const SizedBox(width: 8),
+        //       const Text('Printer Settings'),
+        //     ],
+        //   ),
+        // ),
         // PopupMenuItem(
         //   value: 'profile',
         //   height: 40,
@@ -191,69 +190,69 @@ class HeaderUserDropdown extends StatelessWidget {
         //     ],
         //   ),
         // ),
-        const PopupMenuDivider(height: 1),
-        PopupMenuItem(
-          value: 'logout',
-          height: 40,
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          child: Row(
-            children: [
-              Icon(
-                Icons.logout,
-                size: 16,
-                color: Theme.of(context).colorScheme.error,
-              ),
-              const SizedBox(width: 8),
-              Text(
-                'Logout',
-                style: TextStyle(color: Theme.of(context).colorScheme.error),
-              ),
-            ],
-          ),
-        ),
+        //const PopupMenuDivider(height: 1),
+        // PopupMenuItem(
+        //   value: 'logout',
+        //   height: 40,
+        //   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        //   child: Row(
+        //     children: [
+        //       Icon(
+        //         Icons.logout,
+        //         size: 16,
+        //         color: Theme.of(context).colorScheme.error,
+        //       ),
+        //       const SizedBox(width: 8),
+        //       Text(
+        //         'Logout',
+        //         style: TextStyle(color: Theme.of(context).colorScheme.error),
+        //       ),
+        //     ],
+        //   ),
+        // ),
       ],
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: Colors.grey.shade300),
-        ),
+        //padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        // decoration: BoxDecoration(
+        //   color: Colors.white,
+        //   borderRadius: BorderRadius.circular(8),
+        //   border: Border.all(color: Colors.grey.shade300),
+        // ),
         child: Row(
-          mainAxisSize: MainAxisSize.min,
+          //mainAxisSize: MainAxisSize.min,
           children: [
-            _buildAvatar(context, avatar, displayName),
+            // _buildAvatar(context, avatar, displayName),
             if (showName) ...[
-              const SizedBox(width: 8),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // Text(
-                  //   displayName,
-                  //   style: const TextStyle(
-                  //     fontSize: 14,
-                  //     fontWeight: FontWeight.w600,
-                  //     height: 1.1,
-                  //   ),
-                  //   overflow: TextOverflow.ellipsis,
-                  // ),
-                  if (role != null)
-                    Text(
-                      role,
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: Colors.grey.shade600,
-                        fontWeight: FontWeight.w400,
-                        height: 1.0,
-                      ),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                ],
-              ),
+              //const SizedBox(width: 8),
+              //Column(
+              // crossAxisAlignment: CrossAxisAlignment.start,
+              // mainAxisSize: MainAxisSize.min,
+              //children: [
+              // Text(
+              //   displayName,
+              //   style: const TextStyle(
+              //     fontSize: 14,
+              //     fontWeight: FontWeight.w600,
+              //     height: 1.1,
+              //   ),
+              //   overflow: TextOverflow.ellipsis,
+              // ),
+              // if (role != null)
+              //   Text(
+              //     role,
+              //     style: TextStyle(
+              //       fontSize: 11,
+              //       color: Colors.grey.shade600,
+              //       fontWeight: FontWeight.w400,
+              //       height: 1.0,
+              //     ),
+              //     overflow: TextOverflow.ellipsis,
+              //   ),
+              //],
+              //),
             ],
-            const SizedBox(width: 8),
-            Icon(Icons.arrow_drop_down, size: 20, color: Colors.grey.shade600),
+            // const SizedBox(width: 8),
+            // Icon(Icons.arrow_drop_down, size: 20, color: Colors.grey.shade600),
           ],
         ),
       ),

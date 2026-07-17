@@ -445,18 +445,18 @@ class _HomePageState extends State<HomePage> {
                     _assignTableForSelfOrdering();
                   },
                 ),
-                const SizedBox(height: 12),
-                ElevatedButton.icon(
-                  icon: const Icon(Icons.table_restaurant),
-                  label: const Text('Enter Table Number'),
-                  style: ElevatedButton.styleFrom(
-                    minimumSize: const Size.fromHeight(48),
-                  ),
-                  onPressed: () {
-                    Navigator.of(dialogContext).pop();
-                    _promptForUpdateOrderTableNumber();
-                  },
-                ),
+                // const SizedBox(height: 12),
+                // ElevatedButton.icon(
+                //   icon: const Icon(Icons.table_restaurant),
+                //   label: const Text('Enter Table Number'),
+                //   style: ElevatedButton.styleFrom(
+                //     minimumSize: const Size.fromHeight(48),
+                //   ),
+                //   onPressed: () {
+                //     Navigator.of(dialogContext).pop();
+                //     _promptForUpdateOrderTableNumber();
+                //   },
+                // ),
                 const SizedBox(height: 12),
                 ElevatedButton.icon(
                   icon: const Icon(Icons.logout),
@@ -464,6 +464,8 @@ class _HomePageState extends State<HomePage> {
                   style: ElevatedButton.styleFrom(
                     minimumSize: const Size.fromHeight(48),
                     backgroundColor: Theme.of(context).colorScheme.error,
+                    foregroundColor: Colors.white,
+                    textStyle: const TextStyle(),
                   ),
                   onPressed: () {
                     Navigator.of(dialogContext).pop();

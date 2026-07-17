@@ -260,11 +260,14 @@ class PrinterService {
         'Saving printer: ${printer.name} (ID: ${printer.id}). Current printers count: ${printers.length}',
       );
 
-      // Remove existing printer with same ID if exists
+      // Remove existing printer entries with same ID or same identifier
+      // to avoid duplicate saved entries for the same physical printer.
       final removedCount = printers.length;
-      printers.removeWhere((p) => p.id == printer.id);
+      printers.removeWhere(
+        (p) => p.id == printer.id || p.identifier == printer.identifier,
+      );
       if (removedCount != printers.length) {
-        debugPrint('Removed existing printer with same ID');
+        debugPrint('Removed existing printer with same id/identifier');
       }
 
       printers.add(printer);
@@ -312,8 +315,21 @@ class PrinterService {
         'Loading printers from localStorage (${jsonString.length} chars)',
       );
       final jsonList = jsonDecode(jsonString) as List;
-      final printers = jsonList.map((json) => _printerFromJson(json)).toList();
-      debugPrint('Loaded ${printers.length} printers from localStorage');
+      // Parse printers and deduplicate by identifier to avoid duplicate
+      // print jobs when the same physical printer was saved more than once.
+      final parsed = jsonList.map((json) => _printerFromJson(json)).toList();
+      final Map<String, Printer> uniqueByIdentifier = {};
+      for (final p in parsed) {
+        // Use identifier as the canonical key for a physical printer
+        if (p.identifier.isEmpty) continue;
+        if (!uniqueByIdentifier.containsKey(p.identifier)) {
+          uniqueByIdentifier[p.identifier] = p;
+        } else {
+          debugPrint('Duplicate printer entry ignored: ${p.identifier}');
+        }
+      }
+      final printers = uniqueByIdentifier.values.toList();
+      debugPrint('Loaded ${printers.length} unique printers from localStorage');
       return printers;
     } catch (e) {
       debugPrint('Error loading saved printers: $e');
