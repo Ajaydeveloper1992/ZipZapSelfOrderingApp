@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
 import android.util.Log
+import android.util.Base64
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import com.starmicronics.stario10.*
@@ -34,6 +35,7 @@ class StarXpandPrinterHandler(private val context: Context) : MethodChannel.Meth
             "discoverPrinters" -> discoverPrinters(call, result)
             "printTest" -> printTest(call, result)
             "printKitchenOrder" -> printKitchenOrder(call, result)
+            "printImage" -> printImage(call, result)
             "printCustomerReceipt" -> printCustomerReceipt(call, result)
             "printQuote" -> printQuote(call, result)
             "printReport" -> printReport(call, result)
@@ -42,6 +44,58 @@ class StarXpandPrinterHandler(private val context: Context) : MethodChannel.Meth
             "getPrinterInformation" -> getPrinterInformation(call, result)
             "openCashDrawer" -> openCashDrawer(call, result)
             else -> result.notImplemented()
+        }
+    }
+
+    private fun printImage(call: MethodCall, result: MethodChannel.Result) {
+        val interfaceTypeStr = call.argument<String>("interfaceType") ?: return result.error("INVALID_ARGUMENT", "interfaceType required", null)
+        val identifier = call.argument<String>("identifier") ?: return result.error("INVALID_ARGUMENT", "identifier required", null)
+        val imageBase64 = call.argument<String>("imageBase64") ?: return result.error("INVALID_ARGUMENT", "imageBase64 required", null)
+
+        val interfaceType = when (interfaceTypeStr) {
+            "Lan" -> InterfaceType.Lan
+            "Bluetooth" -> InterfaceType.Bluetooth
+            "Usb" -> InterfaceType.Usb
+            else -> return result.error("INVALID_ARGUMENT", "Invalid interface type", null)
+        }
+
+        coroutineScope.launch(Dispatchers.IO) {
+            try {
+                val imageBytes = Base64.decode(imageBase64, Base64.DEFAULT)
+
+                val settings = StarConnectionSettings(interfaceType, identifier)
+                val printer = StarPrinter(settings, context)
+
+                printer.openAsync().await()
+
+                val builder = StarXpandCommandBuilder()
+
+                // Build a simple document that prints the image and then cuts
+                val imgParam = ImageParameter().setImage(imageBytes)
+                val printerBuilder = PrinterBuilder()
+                    .actionPrintImage(imgParam)
+                    .actionCut(CutType.Partial)
+
+                builder.addDocument(
+                    DocumentBuilder()
+                        .settingPrintableArea(72.0)
+                        .addPrinter(printerBuilder)
+                )
+
+                val commands = builder.getCommands()
+
+                printer.printAsync(commands).await()
+                printer.closeAsync().await()
+
+                withContext(Dispatchers.Main) {
+                    result.success(true)
+                }
+            } catch (e: Exception) {
+                Log.e("StarXpand", "Print image error: ${e.message}", e)
+                withContext(Dispatchers.Main) {
+                    result.error("PRINT_ERROR", e.message, null)
+                }
+            }
         }
     }
 

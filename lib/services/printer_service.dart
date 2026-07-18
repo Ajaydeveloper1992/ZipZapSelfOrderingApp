@@ -102,6 +102,27 @@ class PrinterService {
     }
   }
 
+  // Generic image print helper - sends a base64 PNG/JPEG to native layer
+  static Future<bool> printImage({
+    required String interfaceType,
+    required String identifier,
+    required String imageBase64,
+    String? targetType, // optional: 'kitchen' | 'customer' | 'quote'
+  }) async {
+    try {
+      final result = await _channel.invokeMethod<bool>('printImage', {
+        'interfaceType': interfaceType,
+        'identifier': identifier,
+        'imageBase64': imageBase64,
+        if (targetType != null) 'type': targetType,
+      });
+      return result ?? false;
+    } catch (e) {
+      debugPrint('Error printing image: $e');
+      return false;
+    }
+  }
+
   // Print kitchen order
   static Future<bool> printKitchenOrder({
     required String interfaceType,
@@ -109,6 +130,17 @@ class PrinterService {
     required Map<String, dynamic> orderData,
   }) async {
     try {
+      // If a rendered receipt image is provided, prefer printing the image
+      final imageBase64 = orderData['receiptImage'] as String?;
+      if (imageBase64 != null && imageBase64.isNotEmpty) {
+        return await printImage(
+          interfaceType: interfaceType,
+          identifier: identifier,
+          imageBase64: imageBase64,
+          targetType: 'kitchen',
+        );
+      }
+
       final result = await _channel.invokeMethod<bool>('printKitchenOrder', {
         'interfaceType': interfaceType,
         'identifier': identifier,
@@ -128,6 +160,17 @@ class PrinterService {
     required Map<String, dynamic> orderData,
   }) async {
     try {
+      // If a rendered receipt image is provided, prefer printing the image
+      final imageBase64 = orderData['receiptImage'] as String?;
+      if (imageBase64 != null && imageBase64.isNotEmpty) {
+        return await printImage(
+          interfaceType: interfaceType,
+          identifier: identifier,
+          imageBase64: imageBase64,
+          targetType: 'customer',
+        );
+      }
+
       final result = await _channel.invokeMethod<bool>('printCustomerReceipt', {
         'interfaceType': interfaceType,
         'identifier': identifier,
