@@ -239,6 +239,19 @@ class _NewDineInPageState extends State<NewDineInPage> {
       };
     }
 
+    // Restore table info so guest selection can render in edit mode
+    if (order.tableInfo != null) {
+      setState(() {
+        _tableInfo = {
+          'tableId': order.tableInfo!.tableId,
+          'tableName': order.tableInfo!.tableName,
+          'floorPlanId': order.tableInfo!.floorPlanId,
+          'floorPlanName': _tableInfo?['floorPlanName'] as String? ?? '',
+          'partySize': order.tableInfo!.partySize,
+        };
+      });
+    }
+
     // Convert customer - try to find full customer data from DataProvider
     if (order.customer != null) {
       // First try to find the full customer from DataProvider for complete data
@@ -339,7 +352,7 @@ class _NewDineInPageState extends State<NewDineInPage> {
         inKitchen:
             inKitchen, // Items from InKitchen orders are already in kitchen
         itemStatus: orderItem.itemStatus, // Preserve void/refund status
-        guestGroup: 'whole_table',
+        guestGroup: orderItem.guestGroup ?? 'whole_table',
       );
 
       cartItems.add(cartItem);
@@ -603,6 +616,9 @@ class _NewDineInPageState extends State<NewDineInPage> {
     // Items already in kitchen should never be merged
     if (item1.inKitchen || item2.inKitchen) return false;
 
+    // Items must belong to the same guest group for dine-in grouping
+    if (item1.guestGroup != item2.guestGroup) return false;
+
     // Check product ID
     if (item1.product.id != item2.product.id) return false;
 
@@ -685,6 +701,7 @@ class _NewDineInPageState extends State<NewDineInPage> {
             item.modifiers.isEmpty &&
             item.itemNote.isEmpty &&
             item.itemDiscount == null &&
+            item.guestGroup == _selectedGuestGroup &&
             !item.inKitchen, // Don't merge with items already in kitchen
       );
 
@@ -703,7 +720,7 @@ class _NewDineInPageState extends State<NewDineInPage> {
               id: const Uuid().v4(),
               product: product,
               quantity: 1,
-              guestGroup: 'whole_table',
+              guestGroup: _selectedGuestGroup,
             ),
           );
         });
@@ -752,7 +769,7 @@ class _NewDineInPageState extends State<NewDineInPage> {
             product: customProduct,
             quantity: customItemData['quantity'],
             itemNote: customItemData['itemNote'] ?? '',
-            guestGroup: 'whole_table',
+            guestGroup: _selectedGuestGroup,
           );
 
           setState(() {

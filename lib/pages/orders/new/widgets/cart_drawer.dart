@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:intl/intl.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:zipzap_pos_self_orders/core/services/auth_service.dart';
 import 'package:zipzap_pos_self_orders/models/cart_item_model.dart';
 import 'package:zipzap_pos_self_orders/models/cart_data_model.dart';
 import 'package:zipzap_pos_self_orders/models/modifier_group_model.dart';
@@ -106,13 +108,17 @@ class CartDrawer extends StatefulWidget {
 class _CartDrawerState extends State<CartDrawer> {
   List<Modifier> _modifiers = [];
   DateTime? _selectedPickupTime;
+  bool _showKitchenPrintButton = true;
+  bool _showCustomerReceiptButton = true;
   final OrdersService _ordersService = OrdersService();
+  final AuthService _authService = AuthService();
 
   @override
   void initState() {
     super.initState();
     _selectedPickupTime = widget.initialPickupTime;
     _loadModifiers();
+    _loadPrintButtonSettings();
   }
 
   @override
@@ -163,6 +169,27 @@ class _CartDrawerState extends State<CartDrawer> {
       });
     } catch (e) {
       debugPrint('Error loading modifiers: $e');
+    }
+  }
+
+  Future<void> _loadPrintButtonSettings() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final username = _authService.getProfile()?.username;
+      final kitchenKey = username != null && username.isNotEmpty
+          ? 'print_kitchen_btn_$username'
+          : 'print_kitchen_btn';
+      final receiptKey = username != null && username.isNotEmpty
+          ? 'print_customer_receipt_btn_$username'
+          : 'print_customer_receipt_btn';
+
+      if (!mounted) return;
+      setState(() {
+        _showKitchenPrintButton = prefs.getBool(kitchenKey) ?? true;
+        _showCustomerReceiptButton = prefs.getBool(receiptKey) ?? true;
+      });
+    } catch (e) {
+      debugPrint('Error loading print button settings: $e');
     }
   }
 
@@ -499,28 +526,29 @@ class _CartDrawerState extends State<CartDrawer> {
       child: Row(
         children: [
           // Print Kitchen Button
-          IconButton(
-            icon: widget.isPrintingKitchen
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+          if (_showKitchenPrintButton)
+            IconButton(
+              icon: widget.isPrintingKitchen
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                      ),
+                    )
+                  : Icon(
+                      Icons.print,
+                      size: 20,
+                      color: _hasAnyItems
+                          ? Colors.white
+                          : Colors.white.withValues(alpha: 0.5),
                     ),
-                  )
-                : Icon(
-                    Icons.print,
-                    size: 20,
-                    color: _hasAnyItems
-                        ? Colors.white
-                        : Colors.white.withValues(alpha: 0.5),
-                  ),
-            onPressed: (!_hasAnyItems || widget.isPrintingKitchen)
-                ? null
-                : widget.onPrintKitchen,
-            tooltip: 'Print Kitchen',
-          ),
+              onPressed: (!_hasAnyItems || widget.isPrintingKitchen)
+                  ? null
+                  : widget.onPrintKitchen,
+              tooltip: 'Print Kitchen',
+            ),
           // Order Info and Customer
           Expanded(
             child: Row(
@@ -867,42 +895,43 @@ class _CartDrawerState extends State<CartDrawer> {
                       ),
                     ),
                     // Print Customer Receipt Button
-                    SizedBox(
-                      width: 50,
-                      child: OutlinedButton.icon(
-                        onPressed:
-                            (!hasItems ||
-                                !_hasItemsInKitchen ||
-                                widget.isPrintingCustomer)
-                            ? null
-                            : widget.onPrintCustomer,
-                        icon: widget.isPrintingCustomer
-                            ? const SizedBox(
-                                width: 18,
-                                height: 18,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
+                    if (_showCustomerReceiptButton)
+                      SizedBox(
+                        width: 50,
+                        child: OutlinedButton.icon(
+                          onPressed:
+                              (!hasItems ||
+                                  !_hasItemsInKitchen ||
+                                  widget.isPrintingCustomer)
+                              ? null
+                              : widget.onPrintCustomer,
+                          icon: widget.isPrintingCustomer
+                              ? const SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : Icon(
+                                  Icons.print,
+                                  size: 20,
+                                  color: _hasItemsInKitchen
+                                      ? null
+                                      : Theme.of(context).colorScheme.primary
+                                            .withValues(alpha: 0.5),
                                 ),
-                              )
-                            : Icon(
-                                Icons.print,
-                                size: 20,
-                                color: _hasItemsInKitchen
-                                    ? null
-                                    : Theme.of(context).colorScheme.primary
-                                          .withValues(alpha: 0.5),
-                              ),
-                        label: const Text(''),
-                        style: OutlinedButton.styleFrom(
-                          side: BorderSide(
-                            color: Theme.of(context).colorScheme.primary,
+                          label: const Text(''),
+                          style: OutlinedButton.styleFrom(
+                            side: BorderSide(
+                              color: Theme.of(context).colorScheme.primary,
+                            ),
+                            shape: const RoundedRectangleBorder(),
+                            fixedSize: const Size.fromHeight(42),
+                            padding: EdgeInsets.only(left: 8),
                           ),
-                          shape: const RoundedRectangleBorder(),
-                          fixedSize: const Size.fromHeight(42),
-                          padding: EdgeInsets.only(left: 8),
                         ),
                       ),
-                    ),
                     Expanded(
                       flex: 3,
                       child: FilledButton.icon(

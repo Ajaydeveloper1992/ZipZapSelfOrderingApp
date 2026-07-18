@@ -2,6 +2,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:intl/intl.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:zipzap_pos_self_orders/core/services/auth_service.dart';
 import 'package:zipzap_pos_self_orders/models/cart_item_model.dart';
 import 'package:zipzap_pos_self_orders/models/cart_data_model.dart';
 import 'package:zipzap_pos_self_orders/models/modifier_group_model.dart';
@@ -114,7 +116,10 @@ class CartDrawer extends StatefulWidget {
 
 class _CartDrawerState extends State<CartDrawer> {
   List<Modifier> _modifiers = [];
+  bool _showKitchenPrintButton = true;
+  bool _showCustomerReceiptButton = true;
   final OrdersService _ordersService = OrdersService();
+  final AuthService _authService = AuthService();
   final Set<String> _expandedSections = {
     'whole_table',
   }; // Whole table open by default
@@ -124,6 +129,7 @@ class _CartDrawerState extends State<CartDrawer> {
   void initState() {
     super.initState();
     _loadModifiers();
+    _loadPrintButtonSettings();
     // Update occupied time every minute
     if (widget.orderCreatedAt != null) {
       _occupiedTimeTimer = Timer.periodic(const Duration(minutes: 1), (_) {
@@ -191,6 +197,11 @@ class _CartDrawerState extends State<CartDrawer> {
     return '${duration.inMinutes}m';
   }
 
+  String get _formattedKitchenTime {
+    if (widget.orderCreatedAt == null) return '--';
+    return DateFormat('h:mm a').format(widget.orderCreatedAt!);
+  }
+
   // Get items for a specific guest group
   List<CartItem> _getItemsForGuest(String guestGroup) {
     return widget.cartItems
@@ -230,6 +241,27 @@ class _CartDrawerState extends State<CartDrawer> {
       });
     } catch (e) {
       debugPrint('Error loading modifiers: $e');
+    }
+  }
+
+  Future<void> _loadPrintButtonSettings() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final username = _authService.getProfile()?.username;
+      final kitchenKey = username != null && username.isNotEmpty
+          ? 'print_kitchen_btn_$username'
+          : 'print_kitchen_btn';
+      final receiptKey = username != null && username.isNotEmpty
+          ? 'print_customer_receipt_btn_$username'
+          : 'print_customer_receipt_btn';
+
+      if (!mounted) return;
+      setState(() {
+        _showKitchenPrintButton = prefs.getBool(kitchenKey) ?? true;
+        _showCustomerReceiptButton = prefs.getBool(receiptKey) ?? true;
+      });
+    } catch (e) {
+      debugPrint('Error loading print button settings: $e');
     }
   }
 
@@ -367,69 +399,105 @@ class _CartDrawerState extends State<CartDrawer> {
           children: [
             // Header with actions
             _buildHeader(context),
-            // Cart Items list only; single whole-table order mode
             Expanded(
-              child:
-                  widget.cartItems
-                      .where((item) => item.itemStatus != 'Voided')
-                      .isEmpty
-                  ? Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            Icons.shopping_cart_outlined,
-                            size: 48,
-                            color: Colors.grey.shade400,
+              child: widget.partySize != null && widget.partySize! > 1
+                  ? _buildGuestGroupBody(context)
+                  : widget.cartItems
+                          .where((item) => item.itemStatus != 'Voided')
+                          .isEmpty
+                      ? Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                Icons.shopping_cart_outlined,
+                                size: 48,
+                                color: Colors.grey.shade400,
+                              ),
+                              const SizedBox(height: 12),
+                              Text(
+                                widget.cartItems.isEmpty
+                                    ? 'Cart is empty'
+                                    : 'All items voided',
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .bodyMedium
+                                    ?.copyWith(color: Colors.grey.shade600),
+                              ),
+                            ],
                           ),
-                          const SizedBox(height: 12),
-                          Text(
-                            widget.cartItems.isEmpty
-                                ? 'Cart is empty'
-                                : 'All items voided',
-                            style: Theme.of(context).textTheme.bodyMedium
-                                ?.copyWith(color: Colors.grey.shade600),
+                        )
+                      : Container(
+                          color: Theme.of(context)
+                              .colorScheme
+                              .surfaceContainerHighest
+                              .withValues(alpha: 0.3),
+                          child: ListView.builder(
+                            padding: const EdgeInsets.all(4),
+                            itemCount: widget.cartItems
+                                .where((item) => item.itemStatus != 'Voided')
+                                .length,
+                            itemBuilder: (context, index) {
+                              final nonVoidedItems = widget.cartItems
+                                  .where((item) => item.itemStatus != 'Voided')
+                                  .toList();
+                              final item = nonVoidedItems[index];
+                              return _CartItemCard(
+                                item: item,
+                                index: index,
+                                onUpdate: (newQuantity) =>
+                                    widget.onItemUpdate(item, newQuantity),
+                                onRemove: () => widget.onItemRemove(item),
+                                onTap: widget.onItemTap != null
+                                    ? () => widget.onItemTap!(item)
+                                    : null,
+                                onItemUpdate: widget.onItemUpdate,
+                                populateModifiers: _populateModifiers,
+                                calculateItemTotal: _calculateItemTotal,
+                                calculateItemBaseTotal: _calculateItemBaseTotal,
+                              );
+                            },
                           ),
-                        ],
-                      ),
-                    )
-                  : Container(
-                      color: Theme.of(context)
-                          .colorScheme
-                          .surfaceContainerHighest
-                          .withValues(alpha: 0.3),
-                      child: ListView.builder(
-                        padding: const EdgeInsets.all(4),
-                        itemCount: widget.cartItems
-                            .where((item) => item.itemStatus != 'Voided')
-                            .length,
-                        itemBuilder: (context, index) {
-                          final nonVoidedItems = widget.cartItems
-                              .where((item) => item.itemStatus != 'Voided')
-                              .toList();
-                          final item = nonVoidedItems[index];
-                          return _CartItemCard(
-                            item: item,
-                            index: index,
-                            onUpdate: (newQuantity) =>
-                                widget.onItemUpdate(item, newQuantity),
-                            onRemove: () => widget.onItemRemove(item),
-                            onTap: widget.onItemTap != null
-                                ? () => widget.onItemTap!(item)
-                                : null,
-                            onItemUpdate: widget.onItemUpdate,
-                            populateModifiers: _populateModifiers,
-                            calculateItemTotal: _calculateItemTotal,
-                            calculateItemBaseTotal: _calculateItemBaseTotal,
-                          );
-                        },
-                      ),
-                    ),
+                        ),
             ),
             // Footer with actions and totals
             _buildFooter(context),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildGuestGroupBody(BuildContext context) {
+    final guestCount = widget.partySize ?? 1;
+    final guestSections = <Widget>[];
+
+    guestSections.add(_buildGuestSection(
+      context,
+      'whole_table',
+      'Whole Table',
+      Icons.table_restaurant,
+    ));
+
+    for (var i = 1; i <= guestCount; i++) {
+      guestSections.add(_buildGuestSection(
+        context,
+        'guest_$i',
+        'Guest $i',
+        Icons.person,
+      ));
+    }
+
+    return Container(
+      color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
+      child: ListView(
+        padding: const EdgeInsets.all(4),
+        children: [
+          _buildGuestInfoHeader(context),
+          const SizedBox(height: 4),
+          ...guestSections,
+          const SizedBox(height: 8),
+        ],
       ),
     );
   }
@@ -686,20 +754,23 @@ class _CartDrawerState extends State<CartDrawer> {
       child: Row(
         children: [
           // Print Kitchen Button
-          IconButton(
-            icon: widget.isPrintingKitchen
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                    ),
-                  )
-                : const Icon(Icons.print, size: 20, color: Colors.white),
-            onPressed: widget.isPrintingKitchen ? null : widget.onPrintKitchen,
-            tooltip: 'Print Kitchen',
-          ),
+          if (_showKitchenPrintButton)
+            IconButton(
+              icon: widget.isPrintingKitchen
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                      ),
+                    )
+                  : const Icon(Icons.print, size: 20, color: Colors.white),
+              onPressed: widget.isPrintingKitchen
+                  ? null
+                  : widget.onPrintKitchen,
+              tooltip: 'Print Kitchen',
+            ),
           // Order Info and Table Name (for dine-in)
           Expanded(
             child: Row(
@@ -973,6 +1044,38 @@ class _CartDrawerState extends State<CartDrawer> {
           //     ],
           //   ),
           // ),
+          if (widget.orderCreatedAt != null && !widget.isSelfOrder)
+            Container(
+              width: double.infinity,
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.schedule,
+                    size: 16,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Send to Kitchen: $_formattedKitchenTime',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: Theme.of(context).colorScheme.onSurface,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Text(
+                    '($_occupiedTime)',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
+            ),
           // Action Buttons Row
           SizedBox(
             height: 42,
@@ -1021,32 +1124,33 @@ class _CartDrawerState extends State<CartDrawer> {
                     // ),
 
                     // Print Customer Receipt Button
-                    // SizedBox(
-                    //   width: 50,
-                    //   child: OutlinedButton.icon(
-                    //     onPressed: !hasItems || widget.isPrintingCustomer
-                    //         ? null
-                    //         : widget.onPrintCustomer,
-                    //     icon: widget.isPrintingCustomer
-                    //         ? const SizedBox(
-                    //             width: 18,
-                    //             height: 18,
-                    //             child: CircularProgressIndicator(
-                    //               strokeWidth: 2,
-                    //             ),
-                    //           )
-                    //         : const Icon(Icons.print, size: 20),
-                    //     label: const Text(''),
-                    //     style: OutlinedButton.styleFrom(
-                    //       side: BorderSide(
-                    //         color: Theme.of(context).colorScheme.primary,
-                    //       ),
-                    //       shape: const RoundedRectangleBorder(),
-                    //       fixedSize: const Size.fromHeight(42),
-                    //       padding: EdgeInsets.only(left: 8),
-                    //     ),
-                    //   ),
-                    // ),
+                    if (_showCustomerReceiptButton)
+                      SizedBox(
+                        width: 50,
+                        child: OutlinedButton.icon(
+                          onPressed: !hasItems || widget.isPrintingCustomer
+                              ? null
+                              : widget.onPrintCustomer,
+                          icon: widget.isPrintingCustomer
+                              ? const SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : const Icon(Icons.print, size: 20),
+                          label: const Text(''),
+                          style: OutlinedButton.styleFrom(
+                            side: BorderSide(
+                              color: Theme.of(context).colorScheme.primary,
+                            ),
+                            shape: const RoundedRectangleBorder(),
+                            fixedSize: const Size.fromHeight(42),
+                            padding: EdgeInsets.only(left: 8),
+                          ),
+                        ),
+                      ),
                     Expanded(
                       flex: 3,
                       child: FilledButton.icon(

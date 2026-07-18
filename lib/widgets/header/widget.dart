@@ -81,13 +81,13 @@ class HeaderWidget extends StatelessWidget {
             //         Scaffold.of(context).openDrawer();
             //       },
             // ),
-            //if (isSmallScreen && onCategoriesPressed != null)
-            // HeaderActionButton(
-            //   icon: Icons.category,
-            //   tooltip: 'Categories',
-            //   onPressed: onCategoriesPressed,
-            // ),
-            //if (isTablet) ...[HeaderSearchBox(onChanged: onSearchChanged)],
+            if (isSmallScreen && onCategoriesPressed != null)
+              HeaderActionButton(
+                icon: Icons.category,
+                tooltip: 'Categories',
+                onPressed: onCategoriesPressed,
+              ),
+            if (isTablet) ...[HeaderSearchBox(onChanged: onSearchChanged)],
             const Spacer(),
             if (onRefresh != null)
               IconButton(

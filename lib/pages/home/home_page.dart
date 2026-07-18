@@ -100,10 +100,6 @@ class _HomePageState extends State<HomePage> {
     super.dispose();
   }
 
-  void _setupDataProviderListener() {
-    _dataProvider.addListener(_onDataUpdate);
-  }
-
   void _onDataUpdate() {
     // Update counts and store when DataProvider notifies
     if (mounted) {
@@ -116,6 +112,10 @@ class _HomePageState extends State<HomePage> {
       _updateCashDrawerPermission();
       _updateAssignedTableActiveOrderStatus();
     }
+  }
+
+  void _setupDataProviderListener() {
+    _dataProvider.addListener(_onDataUpdate);
   }
 
   void _updateTakeoutCount() {
@@ -180,6 +180,8 @@ class _HomePageState extends State<HomePage> {
   }
 
   void _updateStoreFromProvider() {
+    if (!mounted) return;
+
     setState(() {
       final store = _dataProvider.store;
       if (store != null) {
@@ -399,6 +401,215 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
+  Future<void> _showPrintButtonSettingsDialog() async {
+    if (!mounted) return;
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final username = _authService.getProfile()?.username;
+      final kitchenKey = username != null && username.isNotEmpty
+          ? 'print_kitchen_btn_$username'
+          : 'print_kitchen_btn';
+      final receiptKey = username != null && username.isNotEmpty
+          ? 'print_customer_receipt_btn_$username'
+          : 'print_customer_receipt_btn';
+      bool kitchenEnabled = prefs.getBool(kitchenKey) ?? true;
+      bool receiptEnabled = prefs.getBool(receiptKey) ?? true;
+
+      await showDialog<void>(
+        context: context,
+        barrierDismissible: true,
+        builder: (dialogContext) {
+          return StatefulBuilder(
+            builder: (context, setState) {
+              return AlertDialog(
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                title: const Text('Print Button Settings'),
+                content: SizedBox(
+                  width: 420,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Choose which print buttons are visible for this staff on order screens.',
+                        style: TextStyle(color: Colors.black54),
+                      ),
+                      const SizedBox(height: 16),
+                      SwitchListTile.adaptive(
+                        contentPadding: EdgeInsets.zero,
+                        title: const Text('Show Print Kitchen Button'),
+                        subtitle: const Text(
+                          'Show or hide the kitchen print icon.',
+                        ),
+                        value: kitchenEnabled,
+                        onChanged: (value) {
+                          setState(() {
+                            kitchenEnabled = value;
+                          });
+                        },
+                      ),
+                      SwitchListTile.adaptive(
+                        contentPadding: EdgeInsets.zero,
+                        title: const Text('Show Print Customer Receipt Button'),
+                        subtitle: const Text(
+                          'Show or hide the receipt print icon.',
+                        ),
+                        value: receiptEnabled,
+                        onChanged: (value) {
+                          setState(() {
+                            receiptEnabled = value;
+                          });
+                        },
+                      ),
+                      // Party Size controls moved to a dedicated settings dialog.
+                    ],
+                  ),
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.of(dialogContext).pop(),
+                    child: const Text('Cancel'),
+                  ),
+                  ElevatedButton(
+                    onPressed: () async {
+                      await prefs.setBool(kitchenKey, kitchenEnabled);
+                      await prefs.setBool(receiptKey, receiptEnabled);
+                      if (!mounted) return;
+                      Navigator.of(dialogContext).pop();
+                      AppToast.success(
+                        context: context,
+                        title: 'Settings Saved',
+                        description: 'Print button visibility updated.',
+                      );
+                    },
+                    child: const Text('Save'),
+                  ),
+                ],
+              );
+            },
+          );
+        },
+      );
+    } catch (e) {
+      if (mounted) {
+        AppToast.error(
+          context: context,
+          title: 'Settings Error',
+          description: e.toString(),
+        );
+      }
+    }
+  }
+
+  Future<void> _showPartySizeSettingsDialog() async {
+    if (!mounted) return;
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final username = _authService.getProfile()?.username;
+      final partySizeKey = username != null && username.isNotEmpty
+          ? 'show_party_size_guest_$username'
+          : 'show_party_size_guest';
+      final quickSelectKey = username != null && username.isNotEmpty
+          ? 'show_quick_select_$username'
+          : 'show_quick_select';
+
+      bool partySizeEnabled = prefs.getBool(partySizeKey) ?? true;
+      bool quickSelectEnabled = prefs.getBool(quickSelectKey) ?? true;
+
+      await showDialog<void>(
+        context: context,
+        barrierDismissible: true,
+        builder: (dialogContext) {
+          return StatefulBuilder(
+            builder: (context, setState) {
+              return AlertDialog(
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                title: const Text('Party Size / Guest Settings'),
+                content: SizedBox(
+                  width: 420,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Control visibility of the party size and quick-select controls for this staff.',
+                        style: TextStyle(color: Colors.black54),
+                      ),
+                      const SizedBox(height: 16),
+                      SwitchListTile.adaptive(
+                        contentPadding: EdgeInsets.zero,
+                        title: const Text('Show Party Size / Guest Popup'),
+                        subtitle: const Text(
+                          'Show or hide the guest counter and party size popup when taking an order.',
+                        ),
+                        value: partySizeEnabled,
+                        onChanged: (value) {
+                          setState(() {
+                            partySizeEnabled = value;
+                            if (!value) quickSelectEnabled = false;
+                          });
+                        },
+                      ),
+                      SwitchListTile.adaptive(
+                        contentPadding: EdgeInsets.zero,
+                        title: const Text('Show Quick Select Buttons'),
+                        subtitle: const Text(
+                          'Show or hide the quick-select chips for party size.',
+                        ),
+                        value: partySizeEnabled && quickSelectEnabled,
+                        onChanged: partySizeEnabled
+                            ? (value) {
+                                setState(() {
+                                  quickSelectEnabled = value;
+                                });
+                              }
+                            : null,
+                      ),
+                    ],
+                  ),
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.of(dialogContext).pop(),
+                    child: const Text('Cancel'),
+                  ),
+                  ElevatedButton(
+                    onPressed: () async {
+                      await prefs.setBool(partySizeKey, partySizeEnabled);
+                      await prefs.setBool(quickSelectKey, quickSelectEnabled);
+                      if (!mounted) return;
+                      Navigator.of(dialogContext).pop();
+                      AppToast.success(
+                        context: context,
+                        title: 'Settings Saved',
+                        description: 'Party size settings updated.',
+                      );
+                    },
+                    child: const Text('Save'),
+                  ),
+                ],
+              );
+            },
+          );
+        },
+      );
+    } catch (e) {
+      if (mounted) {
+        AppToast.error(
+          context: context,
+          title: 'Settings Error',
+          description: e.toString(),
+        );
+      }
+    }
+  }
+
   Future<void> _showHiddenSettingsModal() async {
     if (!mounted) return;
 
@@ -423,7 +634,31 @@ class _HomePageState extends State<HomePage> {
                 ),
                 const SizedBox(height: 20),
                 ElevatedButton.icon(
+                  icon: const Icon(Icons.people_alt_outlined),
+                  label: const Text('Party Size / Guest Settings'),
+                  style: ElevatedButton.styleFrom(
+                    minimumSize: const Size.fromHeight(48),
+                  ),
+                  onPressed: () {
+                    Navigator.of(dialogContext).pop();
+                    _showPartySizeSettingsDialog();
+                  },
+                ),
+                const SizedBox(height: 12),
+                ElevatedButton.icon(
                   icon: const Icon(Icons.print),
+                  label: const Text('Print Button Settings'),
+                  style: ElevatedButton.styleFrom(
+                    minimumSize: const Size.fromHeight(48),
+                  ),
+                  onPressed: () {
+                    Navigator.of(dialogContext).pop();
+                    _showPrintButtonSettingsDialog();
+                  },
+                ),
+                const SizedBox(height: 12),
+                ElevatedButton.icon(
+                  icon: const Icon(Icons.settings_applications_outlined),
                   label: const Text('Printer Settings'),
                   style: ElevatedButton.styleFrom(
                     minimumSize: const Size.fromHeight(48),
@@ -588,13 +823,34 @@ class _HomePageState extends State<HomePage> {
     if (assignedTable != null) {
       final tableId = assignedTable['tableId'] as String?;
       if (tableId != null && tableId.isNotEmpty) {
-        if (!mounted) return;
-        Navigator.pushNamed(
-          context,
-          '/dinein',
-          arguments: {'tableInfo': assignedTable},
-        );
-        return;
+        try {
+          final existingOrder = await _ordersService.getActiveOrderForTable(
+            tableId,
+          );
+          if (!mounted) return;
+
+          if (existingOrder != null) {
+            Navigator.pushNamed(
+              context,
+              '/dinein/new',
+              arguments: {
+                'orderType': 'dineIn',
+                'isEditMode': true,
+                'order': existingOrder,
+                'tableInfo': assignedTable,
+              },
+            );
+          } else {
+            Navigator.pushNamed(
+              context,
+              '/dinein/new',
+              arguments: {'orderType': 'dineIn', 'tableInfo': assignedTable},
+            );
+          }
+          return;
+        } catch (_) {
+          // Fall back to the manual table prompt below if lookup fails.
+        }
       }
     }
 
@@ -1030,6 +1286,27 @@ class _HomePageState extends State<HomePage> {
     bool isSubmitting = false;
     const Color primaryTeal = Color(0xFF006B5F);
     const Color lightTealBg = Color(0xFFD8F0ED);
+    bool showPartySizeControls = true;
+    bool showQuickSelectControls = true;
+
+    // Load per-staff display prefs; if party-size controls are disabled,
+    // skip showing the dialog entirely and return defaults.
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final username = _authService.getProfile()?.username;
+      final partySizeKey = username != null && username.isNotEmpty
+          ? 'show_party_size_guest_$username'
+          : 'show_party_size_guest';
+      final quickSelectKey = username != null && username.isNotEmpty
+          ? 'show_quick_select_$username'
+          : 'show_quick_select';
+
+      showPartySizeControls = prefs.getBool(partySizeKey) ?? true;
+      showQuickSelectControls =
+          showPartySizeControls && (prefs.getBool(quickSelectKey) ?? true);
+    } catch (e) {
+      // If prefs fail, fall back to showing the dialog with controls.
+    }
 
     return await showDialog<Map<String, dynamic>>(
       context: context,
@@ -1063,14 +1340,14 @@ class _HomePageState extends State<HomePage> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               const Text(
-                                'Order Now Details',
+                                'Party Size',
                                 style: TextStyle(
                                   fontSize: 22,
                                   fontWeight: FontWeight.bold,
                                   color: Colors.black87,
                                 ),
                               ),
-                              SizedBox(height: 4),
+                              const SizedBox(height: 4),
                               Text(
                                 tableInfo['tableName'] ?? 'Table',
                                 style: const TextStyle(
@@ -1100,155 +1377,160 @@ class _HomePageState extends State<HomePage> {
                       const SizedBox(height: 28),
 
                       // Guest Count - Large Container
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.symmetric(
-                          vertical: 28,
-                          horizontal: 20,
-                        ),
-                        decoration: BoxDecoration(
-                          color: lightTealBg,
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(
-                            color: Colors.grey.shade300,
-                            width: 1.5,
+                      if (showPartySizeControls) ...[
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.symmetric(
+                            vertical: 28,
+                            horizontal: 20,
+                          ),
+                          decoration: BoxDecoration(
+                            color: lightTealBg,
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(
+                              color: Colors.grey.shade300,
+                              width: 1.5,
+                            ),
+                          ),
+                          child: Column(
+                            children: [
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  GestureDetector(
+                                    onTap: guestCount > 1
+                                        ? () => updateGuestCount(guestCount - 1)
+                                        : null,
+                                    child: Container(
+                                      width: 56,
+                                      height: 56,
+                                      decoration: BoxDecoration(
+                                        color: Colors.white,
+                                        borderRadius: BorderRadius.circular(12),
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color: Colors.black.withValues(
+                                              alpha: 0.08,
+                                            ),
+                                            blurRadius: 6,
+                                            offset: const Offset(0, 2),
+                                          ),
+                                        ],
+                                      ),
+                                      child: Icon(
+                                        Icons.remove,
+                                        color: guestCount > 1
+                                            ? primaryTeal
+                                            : Colors.grey.shade300,
+                                        size: 26,
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 48),
+                                  Text(
+                                    guestCount.toString(),
+                                    style: const TextStyle(
+                                      fontSize: 56,
+                                      fontWeight: FontWeight.bold,
+                                      color: primaryTeal,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 48),
+                                  GestureDetector(
+                                    onTap: () =>
+                                        updateGuestCount(guestCount + 1),
+                                    child: Container(
+                                      width: 56,
+                                      height: 56,
+                                      decoration: BoxDecoration(
+                                        color: Colors.white,
+                                        borderRadius: BorderRadius.circular(12),
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color: Colors.black.withValues(
+                                              alpha: 0.08,
+                                            ),
+                                            blurRadius: 6,
+                                            offset: const Offset(0, 2),
+                                          ),
+                                        ],
+                                      ),
+                                      child: const Icon(
+                                        Icons.add,
+                                        color: primaryTeal,
+                                        size: 26,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 16),
+                              const Text(
+                                'Guest',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  color: Colors.grey,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
-                        child: Column(
-                          children: [
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                GestureDetector(
-                                  onTap: guestCount > 1
-                                      ? () => updateGuestCount(guestCount - 1)
-                                      : null,
-                                  child: Container(
-                                    width: 56,
-                                    height: 56,
-                                    decoration: BoxDecoration(
-                                      color: Colors.white,
-                                      borderRadius: BorderRadius.circular(12),
-                                      boxShadow: [
-                                        BoxShadow(
-                                          color: Colors.black.withValues(
-                                            alpha: 0.08,
-                                          ),
-                                          blurRadius: 6,
-                                          offset: const Offset(0, 2),
-                                        ),
-                                      ],
-                                    ),
-                                    child: Icon(
-                                      Icons.remove,
-                                      color: guestCount > 1
-                                          ? primaryTeal
-                                          : Colors.grey.shade300,
-                                      size: 26,
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(width: 48),
-                                Text(
-                                  guestCount.toString(),
-                                  style: const TextStyle(
-                                    fontSize: 56,
-                                    fontWeight: FontWeight.bold,
-                                    color: primaryTeal,
-                                  ),
-                                ),
-                                const SizedBox(width: 48),
-                                GestureDetector(
-                                  onTap: () => updateGuestCount(guestCount + 1),
-                                  child: Container(
-                                    width: 56,
-                                    height: 56,
-                                    decoration: BoxDecoration(
-                                      color: Colors.white,
-                                      borderRadius: BorderRadius.circular(12),
-                                      boxShadow: [
-                                        BoxShadow(
-                                          color: Colors.black.withValues(
-                                            alpha: 0.08,
-                                          ),
-                                          blurRadius: 6,
-                                          offset: const Offset(0, 2),
-                                        ),
-                                      ],
-                                    ),
-                                    child: const Icon(
-                                      Icons.add,
-                                      color: primaryTeal,
-                                      size: 26,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 16),
-                            const Text(
-                              'Guest',
-                              style: TextStyle(
-                                fontSize: 14,
-                                color: Colors.grey,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 24),
+                        const SizedBox(height: 24),
+                      ],
 
-                      // Quick Select
-                      const Text(
-                        'Quick Select',
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.grey,
+                      // Quick Select (shown only when enabled via settings)
+                      if (showQuickSelectControls) ...[
+                        const Text(
+                          'Quick Select',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.grey,
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 12),
-                      Wrap(
-                        spacing: 10,
-                        runSpacing: 10,
-                        children: [1, 2, 3, 4, 5, 8, 10, 20]
-                            .map(
-                              (count) => GestureDetector(
-                                onTap: () => updateGuestCount(count),
-                                child: Container(
-                                  width: 54,
-                                  height: 54,
-                                  decoration: BoxDecoration(
-                                    color: guestCount == count
-                                        ? primaryTeal
-                                        : Colors.white,
-                                    border: Border.all(
+                        const SizedBox(height: 12),
+                        Wrap(
+                          spacing: 10,
+                          runSpacing: 10,
+                          children: [1, 2, 3, 4, 5, 8, 10, 20]
+                              .map(
+                                (count) => GestureDetector(
+                                  onTap: () => updateGuestCount(count),
+                                  child: Container(
+                                    width: 54,
+                                    height: 54,
+                                    decoration: BoxDecoration(
                                       color: guestCount == count
                                           ? primaryTeal
-                                          : Colors.grey.shade300,
-                                      width: 2,
-                                    ),
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                  child: Center(
-                                    child: Text(
-                                      count.toString(),
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 15,
+                                          : Colors.white,
+                                      border: Border.all(
                                         color: guestCount == count
-                                            ? Colors.white
-                                            : Colors.grey.shade700,
+                                            ? primaryTeal
+                                            : Colors.grey.shade300,
+                                        width: 2,
+                                      ),
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    child: Center(
+                                      child: Text(
+                                        count.toString(),
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 15,
+                                          color: guestCount == count
+                                              ? Colors.white
+                                              : Colors.grey.shade700,
+                                        ),
                                       ),
                                     ),
                                   ),
                                 ),
-                              ),
-                            )
-                            .toList(),
-                      ),
-                      const SizedBox(height: 24),
+                              )
+                              .toList(),
+                        ),
+                        const SizedBox(height: 24),
+                      ],
 
                       // Customer Name
                       TextField(
@@ -1465,6 +1747,7 @@ class _HomePageState extends State<HomePage> {
             : 'assigned_table';
         final toSave = jsonEncode(table);
         await prefs.setString(assignedKey, toSave);
+        await _updateAssignedTableActiveOrderStatus();
 
         if (!mounted) return;
         Navigator.of(context).pop();
@@ -1772,11 +2055,9 @@ class _HomePageState extends State<HomePage> {
                                     return;
                                   }
                                   if (route == '/dinein') {
-                                    Navigator.pushNamed(
-                                      context,
-                                      route,
-                                      arguments: arguments,
-                                    );
+                                    // Direct home-page dine-in access should open
+                                    // the dine-in entry/send-to-kitchen flow.
+                                    _openDineInEntryFlow();
                                     return;
                                   }
                                   if (arguments != null) {
