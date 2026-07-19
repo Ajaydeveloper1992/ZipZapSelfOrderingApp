@@ -4,6 +4,7 @@ import android.Manifest
 import android.app.Activity
 import android.content.Context
 import android.content.pm.PackageManager
+import android.graphics.BitmapFactory
 import android.os.Build
 import android.util.Log
 import android.util.Base64
@@ -71,7 +72,8 @@ class StarXpandPrinterHandler(private val context: Context) : MethodChannel.Meth
                 val builder = StarXpandCommandBuilder()
 
                 // Build a simple document that prints the image and then cuts
-                val imgParam = ImageParameter().setImage(imageBytes)
+                val bitmap = BitmapFactory.decodeByteArray(imageBytes, 0, imageBytes.size)
+                val imgParam = ImageParameter(bitmap, 72)
                 val printerBuilder = PrinterBuilder()
                     .actionPrintImage(imgParam)
                     .actionCut(CutType.Partial)
