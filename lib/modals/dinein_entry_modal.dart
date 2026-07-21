@@ -450,57 +450,6 @@ class _DineInEntryModalState extends State<DineInEntryModal> {
               ),
               const SizedBox(height: 24),
 
-              // Quick Select
-              const Text(
-                'Quick Select',
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.grey,
-                ),
-              ),
-              const SizedBox(height: 12),
-              Wrap(
-                spacing: 10,
-                runSpacing: 10,
-                children: [1, 2, 3, 4, 5, 8, 10, 20]
-                    .map(
-                      (count) => GestureDetector(
-                        onTap: () => _updateGuestCount(count),
-                        child: Container(
-                          width: 54,
-                          height: 54,
-                          decoration: BoxDecoration(
-                            color: _guestCount == count
-                                ? _primaryTeal
-                                : Colors.white,
-                            border: Border.all(
-                              color: _guestCount == count
-                                  ? _primaryTeal
-                                  : Colors.grey.shade300,
-                              width: 2,
-                            ),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Center(
-                            child: Text(
-                              count.toString(),
-                              style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 15,
-                                color: _guestCount == count
-                                    ? Colors.white
-                                    : Colors.grey.shade700,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    )
-                    .toList(),
-              ),
-              const SizedBox(height: 24),
-
               // Customer Name
               TextField(
                 controller: _customerController,

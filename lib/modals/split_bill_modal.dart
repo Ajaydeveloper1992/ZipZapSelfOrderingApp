@@ -200,40 +200,6 @@ class _SplitBillModalState extends State<SplitBillModal> {
             ],
           ),
           const SizedBox(height: 16),
-          Text(
-            'Quick Select',
-            style: Theme.of(
-              context,
-            ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
-          ),
-          const SizedBox(height: 8),
-          Slider(
-            value: _sliderValue,
-            min: 1,
-            max: 20,
-            divisions: 19,
-            label: _sliderValue.round().toString(),
-            onChanged: (value) {
-              _updateValue(value.round());
-            },
-          ),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                '1',
-                style: Theme.of(
-                  context,
-                ).textTheme.bodySmall?.copyWith(color: Colors.grey.shade600),
-              ),
-              Text(
-                '20',
-                style: Theme.of(
-                  context,
-                ).textTheme.bodySmall?.copyWith(color: Colors.grey.shade600),
-              ),
-            ],
-          ),
         ],
       ),
     );

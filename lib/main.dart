@@ -21,6 +21,7 @@ import 'package:zipzap_pos_self_orders/pages/categories/list/categories_page.dar
 import 'package:zipzap_pos_self_orders/pages/profile/profile_page.dart';
 import 'package:zipzap_pos_self_orders/pages/dinein/dinein_page.dart';
 import 'package:zipzap_pos_self_orders/pages/dinein/new/new_dinein_page.dart';
+import 'package:zipzap_pos_self_orders/pages/advanced_settings/advanced_settings_page.dart';
 import 'package:zipzap_pos_self_orders/core/constants/app_constants.dart';
 import 'package:zipzap_pos_self_orders/utils/timezone_utils.dart';
 
@@ -124,6 +125,7 @@ class MainApp extends StatelessWidget {
           '/products/list': (context) => const ProductsPage(),
           '/categories/list': (context) => const CategoriesPage(),
           '/profile': (context) => const ProfilePage(),
+          '/advanced-settings': (context) => const AdvancedSettingsPage(),
         },
       ),
     );

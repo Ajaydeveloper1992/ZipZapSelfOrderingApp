@@ -12,6 +12,7 @@ import 'package:zipzap_pos_self_orders/services/floor_plans_service.dart';
 import 'package:zipzap_pos_self_orders/services/orders_service.dart';
 import 'package:zipzap_pos_self_orders/providers/data_provider.dart';
 import 'package:zipzap_pos_self_orders/widgets/data_loading_progress_dialog.dart';
+import 'package:zipzap_pos_self_orders/core/models/user_profile.dart';
 import 'package:zipzap_pos_self_orders/core/services/auth_service.dart';
 import 'package:zipzap_pos_self_orders/core/services/websocket_service.dart';
 import 'package:zipzap_pos_self_orders/widgets/app_toast.dart';
@@ -22,6 +23,7 @@ import 'package:zipzap_pos_self_orders/services/printer_service.dart';
 import 'package:zipzap_pos_self_orders/models/customer_model.dart';
 import 'package:zipzap_pos_self_orders/models/printer_model.dart';
 import 'package:zipzap_pos_self_orders/widgets/pin_confirmation_dialog.dart';
+import 'package:zipzap_pos_self_orders/pages/advanced_settings/advanced_settings_page.dart';
 import 'dart:convert';
 
 class HomePage extends StatefulWidget {
@@ -197,29 +199,81 @@ class _HomePageState extends State<HomePage> {
     });
   }
 
-  void _updateFloorPlanPermission() {
-    final profile = _authService.getProfile();
+  Future<UserProfile?> _loadProfileIfNeeded() async {
+    try {
+      var profile = _authService.getProfile();
+      if (profile != null) return profile;
+
+      profile = await _authService.getProfileFromStorage();
+      if (profile != null) return profile;
+
+      try {
+        profile = await _authService.fetchProfile();
+      } catch (_) {
+        // ignore fetch errors here; permissions may already be cached
+      }
+      return profile;
+    } catch (e) {
+      debugPrint('Error loading profile: $e');
+      return null;
+    }
+  }
+
+  Future<void> _updateFloorPlanPermission() async {
+    final profile = await _loadProfileIfNeeded();
+    if (!mounted) return;
     setState(() {
       _hasFloorPlanPermission = profile?.canReadFloorPlans ?? false;
     });
   }
 
-  void _updateCashDrawerPermission() {
-    final profile = _authService.getProfile();
+  Future<void> _updateCashDrawerPermission() async {
+    final profile = await _loadProfileIfNeeded();
+    if (!mounted) return;
     setState(() {
       _hasCashDrawerPermission = profile?.canOpenCashDrawer ?? false;
     });
   }
 
+  String _assignedTableKey(String? username) {
+    return username != null && username.isNotEmpty
+        ? 'assigned_table_$username'
+        : 'assigned_table';
+  }
+
+  Future<Map<String, dynamic>?> _getAssignedTableInfo() async {
+    try {
+      final profile = await _loadProfileIfNeeded();
+      final prefs = await SharedPreferences.getInstance();
+      final username =
+          profile?.username ??
+          _authService.getProfile()?.username ??
+          _authService.getLastUsername();
+      final assignedKey = _assignedTableKey(username);
+      final assignedJson = prefs.getString(assignedKey);
+      if (assignedJson != null && assignedJson.isNotEmpty) {
+        return jsonDecode(assignedJson) as Map<String, dynamic>;
+      }
+
+      // Fallback to generic key if user-specific assignment isn't found.
+      final genericKey = 'assigned_table';
+      if (assignedKey != genericKey) {
+        final genericJson = prefs.getString(genericKey);
+        if (genericJson != null && genericJson.isNotEmpty) {
+          return jsonDecode(genericJson) as Map<String, dynamic>;
+        }
+      }
+
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
   Future<void> _updateAssignedTableActiveOrderStatus() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final username = _authService.getProfile()?.username;
-      final assignedKey = username != null && username.isNotEmpty
-          ? 'assigned_table_$username'
-          : 'assigned_table';
-      final assignedJson = prefs.getString(assignedKey);
-      if (assignedJson == null || assignedJson.isEmpty) {
+      final assignedTable = await _getAssignedTableInfo();
+      if (assignedTable == null) {
         if (mounted) {
           setState(() {
             _hasAssignedTable = false;
@@ -230,8 +284,7 @@ class _HomePageState extends State<HomePage> {
         return;
       }
 
-      final tableInfo = jsonDecode(assignedJson) as Map<String, dynamic>;
-      final tableId = tableInfo['tableId'] as String?;
+      final tableId = assignedTable['tableId'] as String?;
       if (tableId == null || tableId.isEmpty) {
         if (mounted) {
           setState(() {
@@ -253,10 +306,11 @@ class _HomePageState extends State<HomePage> {
         });
         _refreshDashboardItems();
       }
-    } catch (_) {
+    } catch (e) {
+      debugPrint('Error updating assigned table status: $e');
       if (mounted) {
         setState(() {
-          _hasAssignedTable = false;
+          _hasAssignedTable = true;
           _hasAssignedTableActiveOrder = false;
         });
         _refreshDashboardItems();
@@ -286,7 +340,7 @@ class _HomePageState extends State<HomePage> {
 
   void _startHiddenSettingsTimer() {
     _hiddenSettingsTimer?.cancel();
-    _hiddenSettingsTimer = Timer(const Duration(seconds: 5), () {
+    _hiddenSettingsTimer = Timer(const Duration(seconds: 3), () {
       _hiddenSettingsTimer = null;
       _openHiddenSettingsIfAuthorized();
     });
@@ -304,7 +358,21 @@ class _HomePageState extends State<HomePage> {
     try {
       final confirmed = await _confirmCurrentPin();
       if (!confirmed || !mounted) return;
-      await _showHiddenSettingsModal();
+
+      if (!mounted) return;
+      await Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (routeContext) => AdvancedSettingsPage(
+            onPartySizeSettings: _showPartySizeSettingsDialog,
+            onPrintButtonSettings: _showPrintButtonSettingsDialog,
+            onAssignTable: _assignTableForSelfOrdering,
+            onLogout: _performLogout,
+            onOpenPrinters: () {
+              Navigator.of(routeContext).pushNamed('/printers');
+            },
+          ),
+        ),
+      );
     } finally {
       _hiddenSettingsActive = false;
     }
@@ -675,10 +743,12 @@ class _HomePageState extends State<HomePage> {
                   style: ElevatedButton.styleFrom(
                     minimumSize: const Size.fromHeight(48),
                   ),
-                  onPressed: () {
-                    Navigator.of(dialogContext).pop();
-                    _assignTableForSelfOrdering();
-                  },
+                  onPressed: _hasFloorPlanPermission
+                      ? () {
+                          Navigator.of(dialogContext).pop();
+                          _assignTableForSelfOrdering();
+                        }
+                      : null,
                 ),
                 // const SizedBox(height: 12),
                 // ElevatedButton.icon(
@@ -800,21 +870,6 @@ class _HomePageState extends State<HomePage> {
           description: 'Error: $e',
         );
       }
-    }
-  }
-
-  Future<Map<String, dynamic>?> _getAssignedTableInfo() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final username = _authService.getProfile()?.username;
-      final assignedKey = username != null && username.isNotEmpty
-          ? 'assigned_table_$username'
-          : 'assigned_table';
-      final assignedJson = prefs.getString(assignedKey);
-      if (assignedJson == null || assignedJson.isEmpty) return null;
-      return jsonDecode(assignedJson) as Map<String, dynamic>;
-    } catch (_) {
-      return null;
     }
   }
 
@@ -1158,11 +1213,13 @@ class _HomePageState extends State<HomePage> {
 
     // If staff has an assigned table for customers, use that directly
     try {
+      final profile = await _loadProfileIfNeeded();
       final prefs = await SharedPreferences.getInstance();
-      final username = _authService.getProfile()?.username;
-      final assignedKey = username != null && username.isNotEmpty
-          ? 'assigned_table_$username'
-          : 'assigned_table';
+      final username =
+          profile?.username ??
+          _authService.getProfile()?.username ??
+          _authService.getLastUsername();
+      final assignedKey = _assignedTableKey(username);
       final assignedJson = prefs.getString(assignedKey);
       if (assignedJson != null && assignedJson.isNotEmpty) {
         final tableInfo = jsonDecode(assignedJson) as Map<String, dynamic>;
@@ -1352,7 +1409,7 @@ class _HomePageState extends State<HomePage> {
                                 tableInfo['tableName'] ?? 'Table',
                                 style: const TextStyle(
                                   fontSize: 13,
-                                  color: Colors.grey,
+                                  color: Colors.black87,
                                 ),
                               ),
                             ],
@@ -1479,83 +1536,58 @@ class _HomePageState extends State<HomePage> {
                         const SizedBox(height: 24),
                       ],
 
-                      // Quick Select (shown only when enabled via settings)
-                      if (showQuickSelectControls) ...[
-                        const Text(
-                          'Quick Select',
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.grey,
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        Wrap(
-                          spacing: 10,
-                          runSpacing: 10,
-                          children: [1, 2, 3, 4, 5, 8, 10, 20]
-                              .map(
-                                (count) => GestureDetector(
-                                  onTap: () => updateGuestCount(count),
-                                  child: Container(
-                                    width: 54,
-                                    height: 54,
-                                    decoration: BoxDecoration(
-                                      color: guestCount == count
-                                          ? primaryTeal
-                                          : Colors.white,
-                                      border: Border.all(
-                                        color: guestCount == count
-                                            ? primaryTeal
-                                            : Colors.grey.shade300,
-                                        width: 2,
-                                      ),
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
-                                    child: Center(
-                                      child: Text(
-                                        count.toString(),
-                                        style: TextStyle(
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: 15,
-                                          color: guestCount == count
-                                              ? Colors.white
-                                              : Colors.grey.shade700,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              )
-                              .toList(),
-                        ),
-                        const SizedBox(height: 24),
-                      ],
-
                       // Customer Name
-                      TextField(
-                        controller: customerController,
-                        decoration: InputDecoration(
-                          hintText: 'Customer Name',
-                          prefixIcon: const Icon(Icons.person, size: 20),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide(color: Colors.grey.shade300),
-                          ),
-                          enabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide(color: Colors.grey.shade300),
-                          ),
-                          focusedBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: const BorderSide(
-                              color: primaryTeal,
-                              width: 2,
+                      Container(
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(14),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.04),
+                              blurRadius: 14,
+                              offset: const Offset(0, 6),
                             ),
-                          ),
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 14,
+                          ],
+                        ),
+                        child: TextField(
+                          controller: customerController,
+                          decoration: InputDecoration(
+                            labelText: 'Customer Name',
+                            labelStyle: TextStyle(
+                              color: Colors.grey.shade700,
+                              fontWeight: FontWeight.w600,
+                            ),
+                            hintText: 'Enter customer name',
+                            prefixIcon: Icon(
+                              Icons.person,
+                              size: 22,
+                              color: primaryTeal,
+                            ),
+                            filled: true,
+                            fillColor: Colors.grey.shade50,
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(14),
+                              borderSide: BorderSide(
+                                color: Colors.grey.shade300,
+                              ),
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(14),
+                              borderSide: BorderSide(
+                                color: Colors.grey.shade300,
+                              ),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(14),
+                              borderSide: const BorderSide(
+                                color: primaryTeal,
+                                width: 2,
+                              ),
+                            ),
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 16,
+                            ),
                           ),
                         ),
                       ),
@@ -1725,6 +1757,38 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _assignTableForSelfOrdering() async {
+    // Ensure profile is loaded so permissions are accurate
+    UserProfile? profile;
+    try {
+      profile = _authService.getProfile();
+      if (profile == null) {
+        profile = await _authService.getProfileFromStorage();
+      }
+      if (profile == null) {
+        try {
+          profile = await _authService.fetchProfile();
+        } catch (_) {
+          // ignore fetch errors, we'll handle permission below
+        }
+      }
+
+      if (mounted) {
+        setState(() {
+          _hasFloorPlanPermission = profile?.canReadFloorPlans ?? false;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error loading profile for permissions: $e');
+    }
+
+    if (!_hasFloorPlanPermission) {
+      AppToast.error(
+        context: context,
+        title: 'Access Denied',
+        description: 'You do not have permission to view floor plans.',
+      );
+      return;
+    }
     String? dialogError;
     bool isLoading = false;
     Map<String, dynamic>? selectedTable;
@@ -1741,12 +1805,22 @@ class _HomePageState extends State<HomePage> {
 
       try {
         final prefs = await SharedPreferences.getInstance();
-        final username = _authService.getProfile()?.username;
-        final assignedKey = username != null && username.isNotEmpty
-            ? 'assigned_table_$username'
-            : 'assigned_table';
+        final username =
+            profile?.username ??
+            _authService.getProfile()?.username ??
+            _authService.getLastUsername();
+        final assignedKey = _assignedTableKey(username);
         final toSave = jsonEncode(table);
         await prefs.setString(assignedKey, toSave);
+
+        if (mounted) {
+          setState(() {
+            _hasAssignedTable = true;
+            _hasAssignedTableActiveOrder = false;
+          });
+          _refreshDashboardItems();
+        }
+
         await _updateAssignedTableActiveOrderStatus();
 
         if (!mounted) return;
@@ -1916,11 +1990,13 @@ class _HomePageState extends State<HomePage> {
       if (item.route == '#') return false;
       // Filter Takeout based on pickUp or delivery service
       if (item.route == '/takeout' && !_isTakeoutEnabled) return false;
-      // Filter Dine-In based on dineIn service AND floor_plans permission
-      if ((item.route == '/dinein' ||
-              item.route == '#dinein_entry' ||
-              item.route == '#update_orders') &&
+      // Only the direct Dine-In tile requires dineIn service support
+      if (item.route == '/dinein' &&
           (!_isDineInEnabled || !_hasFloorPlanPermission))
+        return false;
+      // Order Now and Update Orders only require floor plan permission
+      if ((item.route == '#dinein_entry' || item.route == '#update_orders') &&
+          !_hasFloorPlanPermission)
         return false;
       // Filter Cash Drawer based on cash_drawer permission
       if (item.route == '#open_cash_drawer' && !_hasCashDrawerPermission)
@@ -1952,11 +2028,13 @@ class _HomePageState extends State<HomePage> {
       if (!item.enabled) return false;
       // Filter Takeout based on pickUp or delivery service
       if (item.route == '/takeout' && !_isTakeoutEnabled) return false;
-      // Filter Dine-In based on dineIn service AND floor_plans permission
-      if ((item.route == '/dinein' ||
-              item.route == '#dinein_entry' ||
-              item.route == '#update_orders') &&
+      // Only the direct Dine-In tile requires dineIn service support
+      if (item.route == '/dinein' &&
           (!_isDineInEnabled || !_hasFloorPlanPermission))
+        return false;
+      // Order Now and Update Orders only require floor plan permission
+      if ((item.route == '#dinein_entry' || item.route == '#update_orders') &&
+          !_hasFloorPlanPermission)
         return false;
       // Filter Cash Drawer based on cash_drawer permission
       if (item.route == '#open_cash_drawer' && !_hasCashDrawerPermission)
