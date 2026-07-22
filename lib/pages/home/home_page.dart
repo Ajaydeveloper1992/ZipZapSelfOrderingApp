@@ -24,6 +24,8 @@ import 'package:zipzap_pos_self_orders/models/customer_model.dart';
 import 'package:zipzap_pos_self_orders/models/printer_model.dart';
 import 'package:zipzap_pos_self_orders/widgets/pin_confirmation_dialog.dart';
 import 'package:zipzap_pos_self_orders/pages/advanced_settings/advanced_settings_page.dart';
+import 'package:zipzap_pos_self_orders/modals/self_order_request_modal.dart';
+import 'package:zipzap_pos_self_orders/models/order_model.dart';
 import 'dart:convert';
 
 class HomePage extends StatefulWidget {
@@ -46,7 +48,7 @@ class _HomePageState extends State<HomePage> {
   bool _hasAssignedTable = false;
   bool _hasAssignedTableActiveOrder = false;
   bool _hasCashDrawerPermission = false;
-  bool _isUpdatingStoreStatus = false;
+  final bool _isUpdatingStoreStatus = false;
   Timer? _hiddenSettingsTimer;
   bool _hiddenSettingsActive = false;
 
@@ -624,21 +626,21 @@ class _HomePageState extends State<HomePage> {
                           });
                         },
                       ),
-                      SwitchListTile.adaptive(
-                        contentPadding: EdgeInsets.zero,
-                        title: const Text('Show Quick Select Buttons'),
-                        subtitle: const Text(
-                          'Show or hide the quick-select chips for party size.',
-                        ),
-                        value: partySizeEnabled && quickSelectEnabled,
-                        onChanged: partySizeEnabled
-                            ? (value) {
-                                setState(() {
-                                  quickSelectEnabled = value;
-                                });
-                              }
-                            : null,
-                      ),
+                      // SwitchListTile.adaptive(
+                      //   contentPadding: EdgeInsets.zero,
+                      //   title: const Text('Show Quick Select Buttons'),
+                      //   subtitle: const Text(
+                      //     'Show or hide the quick-select chips for party size.',
+                      //   ),
+                      //   value: partySizeEnabled && quickSelectEnabled,
+                      //   onChanged: partySizeEnabled
+                      //       ? (value) {
+                      //           setState(() {
+                      //             quickSelectEnabled = value;
+                      //           });
+                      //         }
+                      //       : null,
+                      // ),
                     ],
                   ),
                 ),
@@ -1094,6 +1096,14 @@ class _HomePageState extends State<HomePage> {
       backgroundColor: Colors.blue.shade100,
       borderColor: Colors.blue.shade300,
       route: '#update_orders',
+    ),
+    DashboardItem(
+      title: 'Send Request',
+      description: 'Request assistance from staff',
+      icon: Icons.notifications_active,
+      backgroundColor: Colors.amber.shade100,
+      borderColor: Colors.amber.shade300,
+      route: '#self_order_request',
     ),
     // DashboardItem(
     //   title: 'Takeout',
@@ -1761,9 +1771,7 @@ class _HomePageState extends State<HomePage> {
     UserProfile? profile;
     try {
       profile = _authService.getProfile();
-      if (profile == null) {
-        profile = await _authService.getProfileFromStorage();
-      }
+      profile ??= await _authService.getProfileFromStorage();
       if (profile == null) {
         try {
           profile = await _authService.fetchProfile();
@@ -1992,15 +2000,18 @@ class _HomePageState extends State<HomePage> {
       if (item.route == '/takeout' && !_isTakeoutEnabled) return false;
       // Only the direct Dine-In tile requires dineIn service support
       if (item.route == '/dinein' &&
-          (!_isDineInEnabled || !_hasFloorPlanPermission))
+          (!_isDineInEnabled || !_hasFloorPlanPermission)) {
         return false;
+      }
       // Order Now and Update Orders only require floor plan permission
       if ((item.route == '#dinein_entry' || item.route == '#update_orders') &&
-          !_hasFloorPlanPermission)
+          !_hasFloorPlanPermission) {
         return false;
+      }
       // Filter Cash Drawer based on cash_drawer permission
-      if (item.route == '#open_cash_drawer' && !_hasCashDrawerPermission)
+      if (item.route == '#open_cash_drawer' && !_hasCashDrawerPermission) {
         return false;
+      }
       return true;
     }).toList();
 
@@ -2030,15 +2041,18 @@ class _HomePageState extends State<HomePage> {
       if (item.route == '/takeout' && !_isTakeoutEnabled) return false;
       // Only the direct Dine-In tile requires dineIn service support
       if (item.route == '/dinein' &&
-          (!_isDineInEnabled || !_hasFloorPlanPermission))
+          (!_isDineInEnabled || !_hasFloorPlanPermission)) {
         return false;
+      }
       // Order Now and Update Orders only require floor plan permission
       if ((item.route == '#dinein_entry' || item.route == '#update_orders') &&
-          !_hasFloorPlanPermission)
+          !_hasFloorPlanPermission) {
         return false;
+      }
       // Filter Cash Drawer based on cash_drawer permission
-      if (item.route == '#open_cash_drawer' && !_hasCashDrawerPermission)
+      if (item.route == '#open_cash_drawer' && !_hasCashDrawerPermission) {
         return false;
+      }
       return true;
     }).toList();
   }
@@ -2066,6 +2080,158 @@ class _HomePageState extends State<HomePage> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  /// Open self-order request flow - allow customers to select an order and make requests
+  Future<void> _openSelfOrderRequestFlow() async {
+    try {
+      // Check if staff has assigned a table
+      final assignedTable = await _getAssignedTableInfo();
+      if (assignedTable != null) {
+        final tableId = assignedTable['tableId'] as String?;
+        if (tableId != null && tableId.isNotEmpty) {
+          // Get active order for assigned table
+          final order = await _ordersService.getActiveOrderForTable(tableId);
+          if (!mounted) return;
+
+          if (order != null) {
+            _openRequestModal(order);
+            return;
+          } else {
+            AppToast.info(
+              context: context,
+              title: 'No Active Order',
+              description: 'No active order found for your assigned table',
+            );
+            return;
+          }
+        }
+      }
+
+      // Get all active dine-in orders if no assigned table
+      final response = await _ordersService.getAllOrders(
+        orderType: 'Dine-in',
+        orderstatus: 'InKitchen,Pending',
+        limit: 100,
+      );
+
+      if (!mounted) return;
+
+      final dineInOrders = response.orders
+          .where((order) => order.orderType.toLowerCase() == 'dine-in')
+          .toList();
+
+      if (dineInOrders.isEmpty) {
+        AppToast.info(
+          context: context,
+          title: 'No Active Orders',
+          description: 'No active dine-in orders found',
+        );
+        return;
+      }
+
+      // If only one order, open request modal directly
+      if (dineInOrders.length == 1) {
+        if (!mounted) return;
+        _openRequestModal(dineInOrders.first);
+        return;
+      }
+
+      // Show dialog to select order
+      if (!mounted) return;
+      showDialog(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          title: const Text('Select Your Order'),
+          content: SizedBox(
+            width: 400,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: dineInOrders.map((order) {
+                  final tableInfo = order.tableInfo;
+                  final tableName = tableInfo?.tableName ?? 'Unknown Table';
+                  final orderNumber = order.orderNumber;
+
+                  return Card(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    child: ListTile(
+                      leading: Container(
+                        width: 40,
+                        height: 40,
+                        decoration: BoxDecoration(
+                          color: Colors.amber.shade100,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Icon(
+                          Icons.table_restaurant,
+                          color: Colors.amber.shade700,
+                          size: 20,
+                        ),
+                      ),
+                      title: Text(
+                        'Order #$orderNumber',
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 14,
+                        ),
+                      ),
+                      subtitle: Text(
+                        'Table: $tableName',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey.shade600,
+                        ),
+                      ),
+                      trailing: const Icon(Icons.arrow_forward, size: 18),
+                      onTap: () {
+                        Navigator.of(dialogContext).pop();
+                        _openRequestModal(order);
+                      },
+                    ),
+                  );
+                }).toList(),
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Cancel'),
+            ),
+          ],
+        ),
+      );
+    } catch (e) {
+      if (mounted) {
+        AppToast.error(
+          context: context,
+          title: 'Error',
+          description: 'Failed to load orders: $e',
+        );
+      }
+    }
+  }
+
+  /// Open the self-order request modal for a specific order
+  void _openRequestModal(Order order) {
+    showDialog(
+      context: context,
+      builder: (context) => SelfOrderRequestModal(
+        order: order,
+        storeId: order.store?.id,
+        onRequestCreated: (request) {
+          AppToast.success(
+            context: context,
+            title: 'Request Sent!',
+            description: 'Staff will assist you shortly',
+          );
+        },
       ),
     );
   }
@@ -2130,6 +2296,10 @@ class _HomePageState extends State<HomePage> {
                                   }
                                   if (route == '#update_orders') {
                                     _promptForUpdateOrderTableNumber();
+                                    return;
+                                  }
+                                  if (route == '#self_order_request') {
+                                    _openSelfOrderRequestFlow();
                                     return;
                                   }
                                   if (route == '/dinein') {

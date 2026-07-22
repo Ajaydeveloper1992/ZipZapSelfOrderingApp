@@ -45,7 +45,7 @@ class TimeClockUser {
     );
   }
 
-  String get fullName => '${firstName} ${lastName ?? ''}'.trim();
+  String get fullName => '$firstName ${lastName ?? ''}'.trim();
 }
 
 class TimeClockStore {
@@ -101,9 +101,11 @@ class TimeClockEntry {
           ? TimeClockStore.fromJson(json['store'])
           : null,
       clockIn: DateTime.parse(json['clockIn']),
-      clockOut:
-          json['clockOut'] != null ? DateTime.parse(json['clockOut']) : null,
-      breaks: (json['breaks'] as List<dynamic>?)
+      clockOut: json['clockOut'] != null
+          ? DateTime.parse(json['clockOut'])
+          : null,
+      breaks:
+          (json['breaks'] as List<dynamic>?)
               ?.map((b) => TimeClockBreak.fromJson(b as Map<String, dynamic>))
               .toList() ??
           [],

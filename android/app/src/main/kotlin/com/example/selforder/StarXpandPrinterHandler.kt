@@ -381,19 +381,15 @@ class StarXpandPrinterHandler(private val context: Context) : MethodChannel.Meth
         val orderNumber = (orderData["orderNumber"] as? String) ?: ""
         val orderDate = (orderData["orderDate"] as? String) ?: ""
         val customerName = (orderData["customerName"] as? String) ?: ""
-        val customerPhone = (orderData["customerPhone"] as? String) ?: ""
+        val orderNote = (orderData["orderNote"] as? String) ?: ""
         val items = (orderData["items"] as? List<*>) ?: emptyList<Any>()
         val subtotal = (orderData["subtotal"] as? Number)?.toDouble() ?: 0.0
         val tax = (orderData["tax"] as? Number)?.toDouble() ?: 0.0
-        val tip = (orderData["tip"] as? Number)?.toDouble() ?: 0.0
-        val discount = (orderData["discount"] as? Number)?.toDouble() ?: 0.0
         val total = (orderData["total"] as? Number)?.toDouble() ?: 0.0
-        val splitInfo = (orderData["splitInfo"] as? String)
-        val fullTotal = (orderData["fullTotal"] as? Number)?.toDouble()
 
         val printerBuilder = PrinterBuilder()
 
-        // Store header - Bold and large
+        // Header
         printerBuilder
             .add(
                 PrinterBuilder()
@@ -402,75 +398,62 @@ class StarXpandPrinterHandler(private val context: Context) : MethodChannel.Meth
                     .styleAlignment(Alignment.Center)
                     .actionPrintText("$storeName\n")
             )
+            .styleMagnification(MagnificationParameter(1, 1))
+            .styleBold(false)
             .styleAlignment(Alignment.Center)
             .actionPrintText("$storeAddress\n")
             .actionPrintText("$storePhone\n")
             .actionPrintText("$storeEmail\n")
+            .actionFeed(0.5)
 
-        // Split indicator (e.g., "Split 1 of 2")
-        if (!splitInfo.isNullOrEmpty()) {
+        printerBuilder
+            .actionPrintRuledLine(RuledLineParameter(72.0).setThickness(0.3))
+            .actionFeed(0.8)
+            .styleAlignment(Alignment.Left)
+
+        // Order meta
+        printerBuilder
+            .actionPrintText("Order : ", TextParameter().setWidth(20))
+            .actionPrintText(
+                "#$orderNumber\n",
+                TextParameter().setWidth(52, TextWidthParameter().setAlignment(TextAlignment.Right))
+            )
+            .actionPrintText("Customer : ", TextParameter().setWidth(20))
+            .actionPrintText(
+                "$customerName\n",
+                TextParameter().setWidth(52, TextWidthParameter().setAlignment(TextAlignment.Right))
+            )
+            .actionPrintText("Date : ", TextParameter().setWidth(20))
+            .actionPrintText(
+                "$orderDate\n",
+                TextParameter().setWidth(52, TextWidthParameter().setAlignment(TextAlignment.Right))
+            )
+
+        if (orderNote.isNotEmpty()) {
             printerBuilder
-                .actionFeed(0.5)
-                .add(
-                    PrinterBuilder()
-                        .styleMagnification(MagnificationParameter(1, 1))
-                        .styleBold(true)
-                        .styleInvert(true)
-                        .styleAlignment(Alignment.Center)
-                        .actionPrintText(" $splitInfo \n")
+                .actionPrintText("Order Note: ", TextParameter().setWidth(20))
+                .actionPrintText(
+                    "$orderNote\n",
+                    TextParameter().setWidth(52, TextWidthParameter().setAlignment(TextAlignment.Right))
                 )
         }
 
         printerBuilder
-            .actionPrintRuledLine(RuledLineParameter(72.0).setThickness(0.3))
-            .actionFeed(1.0)
-            .styleAlignment(Alignment.Left) // Reset to left alignment
+            .actionFeed(0.5)
+            .actionPrintRuledLine(RuledLineParameter(72.0).setThickness(0.1))
+            .actionFeed(0.5)
 
-        // Order details
+        // Item headers
         printerBuilder
+            .styleBold(true)
+            .actionPrintText("Item", TextParameter().setWidth(28))
+            .actionPrintText("Qty", TextParameter().setWidth(12, TextWidthParameter().setAlignment(TextAlignment.Right)))
             .actionPrintText(
-                "Order Date:",
-                TextParameter().setWidth(24)
+                "Price\n",
+                TextParameter().setWidth(20, TextWidthParameter().setAlignment(TextAlignment.Right))
             )
-            .actionPrintText(
-                "$orderDate\n",
-                TextParameter()
-                    .setWidth(24, TextWidthParameter().setAlignment(TextAlignment.Right))
-            )
-            .actionPrintText(
-                "Order #:",
-                TextParameter().setWidth(24)
-            )
-            .actionPrintText(
-                "$orderNumber",
-                TextParameter().setWidth(24, TextWidthParameter().setAlignment(TextAlignment.Right))
-            )
-
-        // Customer info
-        if (customerName.isNotEmpty()) {
-            printerBuilder.actionPrintText("Customer Name: ", TextParameter().setWidth(24))
-            .actionPrintText(
-                "$customerName",
-                TextParameter().setWidth(24, TextWidthParameter().setAlignment(TextAlignment.Right))
-            )
-        }
-        if (customerPhone.isNotEmpty()) {
-            printerBuilder.actionPrintText("Customer Phone: ", TextParameter().setWidth(24))
-            .actionPrintText(
-                "$customerPhone",
-                TextParameter().setWidth(24, TextWidthParameter().setAlignment(TextAlignment.Right))
-            )
-        }
-
-        printerBuilder.actionPrintRuledLine(RuledLineParameter(72.0).setThickness(0.1))
-        .actionFeed(1.0)
-        printerBuilder.actionPrintText("Item ", TextParameter().setWidth(24))
-        .actionPrintText(
-            "Price",
-            TextParameter().setWidth(24, TextWidthParameter().setAlignment(TextAlignment.Right))
-        )
-        printerBuilder.actionPrintRuledLine(RuledLineParameter(72.0).setThickness(0.1))
-        .actionFeed(1.0)
+            .styleBold(false)
+            .actionFeed(0.5)
 
         // Items
         for (item in items) {
@@ -481,117 +464,79 @@ class StarXpandPrinterHandler(private val context: Context) : MethodChannel.Meth
             val modifiers = (itemMap["modifiers"] as? List<*>) ?: emptyList<Any>()
             val itemNote = (itemMap["itemNote"] as? String) ?: ""
 
-            // Item line: quantity x name on left, price on right
             printerBuilder
                 .styleBold(true)
                 .actionPrintText(
-                    "$quantity x $name",
-                    TextParameter().setWidth(36)
+                    name,
+                    TextParameter().setWidth(28)
+                )
+                .actionPrintText(
+                    quantity.toString(),
+                    TextParameter().setWidth(12, TextWidthParameter().setAlignment(TextAlignment.Right))
                 )
                 .actionPrintText(
                     "$" + String.format("%.2f\n", price),
-                    TextParameter().setWidth(12, TextWidthParameter().setAlignment(TextAlignment.Right))
+                    TextParameter().setWidth(20, TextWidthParameter().setAlignment(TextAlignment.Right))
                 )
                 .styleBold(false)
 
-            // Modifiers
             for (modifier in modifiers) {
                 val modMap = modifier as? Map<*, *> ?: continue
                 val modName = (modMap["name"] as? String) ?: ""
-                val modPrice = (modMap["priceAdjustment"] as? Number)?.toDouble() ?: 0.0
-                val modPriceStr = if (modPrice > 0) " (+$${String.format("%.2f", modPrice)})" else ""
-                printerBuilder.actionPrintText("  $modName$modPriceStr\n")
+                printerBuilder.actionPrintText("• $modName\n")
             }
 
-            // Item note
             if (itemNote.isNotEmpty()) {
-                printerBuilder.actionPrintText("  Note: $itemNote\n")
+                printerBuilder.actionPrintText("• $itemNote\n")
             }
             printerBuilder.actionFeedLine(1)
         }
 
-        printerBuilder.actionPrintRuledLine(RuledLineParameter(72.0).setThickness(0.1))
-        .actionFeed(1.0)
+        printerBuilder
+            .actionPrintRuledLine(RuledLineParameter(72.0).setThickness(0.1))
+            .actionFeed(0.8)
 
-        // Summary
         printerBuilder
             .actionPrintText(
-                "Sub Total:",
-                TextParameter().setWidth(24)
+                "Subtotal",
+                TextParameter().setWidth(44)
             )
             .actionPrintText(
                 "$" + String.format("%.2f\n", subtotal),
-                TextParameter()
-                    .setWidth(24, TextWidthParameter().setAlignment(TextAlignment.Right))
+                TextParameter().setWidth(28, TextWidthParameter().setAlignment(TextAlignment.Right))
             )
-
-        if (discount > 0) {
-            printerBuilder
-                .actionPrintText(
-                    "Discount:",
-                    TextParameter().setWidth(24)
-                )
-                .actionPrintText(
-                    "-$" + String.format("%.2f\n", discount),
-                    TextParameter()
-                        .setWidth(24, TextWidthParameter().setAlignment(TextAlignment.Right))
-                )
-        }
 
         if (tax > 0) {
             printerBuilder
                 .actionPrintText(
-                    "Tax:",
-                    TextParameter().setWidth(24)
+                    "Tax",
+                    TextParameter().setWidth(44)
                 )
                 .actionPrintText(
                     "$" + String.format("%.2f\n", tax),
-                    TextParameter()
-                        .setWidth(24, TextWidthParameter().setAlignment(TextAlignment.Right))
+                    TextParameter().setWidth(28, TextWidthParameter().setAlignment(TextAlignment.Right))
                 )
         }
 
-        if (tip > 0) {
-            printerBuilder
-                .actionPrintText(
-                    "Tip:",
-                    TextParameter().setWidth(24)
-                )
-                .actionPrintText(
-                    "$" + String.format("%.2f\n", tip),
-                    TextParameter()
-                        .setWidth(24, TextWidthParameter().setAlignment(TextAlignment.Right))
-                )
-        }
-
-        // Total line - show split/full format when split info is present
-        val totalDisplay = if (splitInfo != null && fullTotal != null) {
-            "$" + String.format("%.2f", total) + " / $" + String.format("%.2f\n", fullTotal)
-        } else {
-            "$" + String.format("%.2f\n", total)
-        }
-        
         printerBuilder
             .styleBold(true)
             .actionPrintText(
-                "Total:",
-                TextParameter().setWidth(24)
+                "TOTAL",
+                TextParameter().setWidth(44)
             )
             .actionPrintText(
-                totalDisplay,
-                TextParameter()
-                    .setWidth(24, TextWidthParameter().setAlignment(TextAlignment.Right))
+                "$" + String.format("%.2f\n", total),
+                TextParameter().setWidth(28, TextWidthParameter().setAlignment(TextAlignment.Right))
             )
             .styleBold(false)
 
-        // Footer
         printerBuilder
             .actionFeed(1.0)
             .actionPrintRuledLine(RuledLineParameter(72.0).setThickness(0.1))
-            .actionFeed(1.0)
+            .actionFeed(0.8)
             .styleAlignment(Alignment.Center)
-            .actionPrintText("Thank you for your business!\n")
-            .actionPrintText("Powered by: ZipZap POS\n")
+            .actionPrintText("Thank You!\n")
+            .actionPrintText("Visit Again\n")
             .actionFeed(2.0)
             .actionCut(CutType.Partial)
 
@@ -652,9 +597,6 @@ class StarXpandPrinterHandler(private val context: Context) : MethodChannel.Meth
         val isReturningCustomer = (orderData["isReturningCustomer"] as? Boolean) ?: false
         val customerOrderCount = (orderData["customerOrderCount"] as? Number)?.toInt() ?: 0
         val items = (orderData["items"] as? List<*>) ?: emptyList<Any>()
-        val subtotal = (orderData["subtotal"] as? Number)?.toDouble() ?: 0.0
-        val tax = (orderData["tax"] as? Number)?.toDouble() ?: 0.0
-        val total = (orderData["total"] as? Number)?.toDouble() ?: 0.0
         val note = (orderData["note"] as? String) ?: ""
         val orderType = (orderData["orderType"] as? String) ?: "PICKUP"
         val placedAt = (orderData["placedAt"] as? String) ?: orderDate
@@ -664,155 +606,110 @@ class StarXpandPrinterHandler(private val context: Context) : MethodChannel.Meth
 
         printerBuilder.actionFeedLine(2)
 
-        // Header [Store Name     Order Type]
         printerBuilder
             .styleMagnification(MagnificationParameter(2, 2))
             .styleBold(true)
-            .styleAlignment(Alignment.Left)
-            .actionPrintText(
-                storeName,
-                TextParameter()
-                    .setWidth(16, TextWidthParameter().setAlignment(TextAlignment.Left))
-            )
-            .actionPrintText(
-                orderType,
-                TextParameter()
-                    .setWidth(8, TextWidthParameter().setAlignment(TextAlignment.Right))
-            )
-            .actionPrintText("\n")
+            .styleAlignment(Alignment.Center)
+            .actionPrintText("$storeName\n")
+            .actionFeed(0.5)
+            .styleMagnification(MagnificationParameter(1, 1))
+            .styleBold(false)
+            .actionPrintText("$orderType\n")
+            .actionFeed(0.5)
 
-        // Customer name and order ID in black bar (inverted with 2x magnification)
-        // Customer name on left, order number on right
-        val displayCustomerName = if (customerName.isNotEmpty()) customerName else "Guest"
+        val customerLine = if (customerName.isNotEmpty() && orderNumber.isNotEmpty()) {
+            "$customerName - $orderNumber"
+        } else if (customerName.isNotEmpty()) {
+            customerName
+        } else {
+            "Guest"
+        }
+
         printerBuilder
-            .add(
-                PrinterBuilder()
-                    .styleMagnification(MagnificationParameter(2, 3))
-                    .styleInvert(true)
-                    .styleBold(true)
-                    .actionPrintText(
-                        displayCustomerName,
-                        TextParameter().setWidth(14)
-                    )
-                    .actionPrintText(
-                        orderNumber,
-                        TextParameter().setWidth(10, TextWidthParameter().setAlignment(TextAlignment.Right))
-                    )
-                    .actionPrintText("\n")
-            )
-            .styleMagnification(MagnificationParameter(1, 2))  // Slightly larger size (1x width, 2x height)
-            .styleBold(false)                                   // Reset bold
-            .styleInvert(false)    
+            .styleAlignment(Alignment.Center)
+            .actionPrintText("$customerLine\n")
 
         if (isReturningCustomer) {
             val orderLabel = if (customerOrderCount == 1) "Order" else "Orders"
             val returningText = if (customerOrderCount > 0) {
-                " Returning Customer ($customerOrderCount $orderLabel) "
+                "Returning Customer [$customerOrderCount $orderLabel]"
             } else {
-                " Returning Customer "
+                "Returning Customer"
             }
             printerBuilder
-                .actionFeed(0.5)
-                .add(
-                    PrinterBuilder()
-                        .styleAlignment(Alignment.Center)
-                        .styleInvert(true)
-                        .styleBold(true)
-                        .actionPrintText(returningText)
-                )
-                .actionPrintText("\n")
-        }     
-            
-        // Customer phone number in centered align if found
+                .actionFeed(0.3)
+                .styleBold(true)
+                .actionPrintText("$returningText\n")
+                .styleBold(false)
+        }
+
         if (customerPhone.isNotEmpty()) {
             printerBuilder
-                .actionFeed(0.5)
+                .actionFeed(0.3)
                 .styleAlignment(Alignment.Center)
                 .actionPrintText("Phone: $customerPhone\n")
                 .styleAlignment(Alignment.Left)
         }
 
-        // Disposable items (can be added to orderData if needed)
-        // printerBuilder
-        //     .styleInvert(false)
-        //     .styleBold(false)
-        //     .actionPrintText("Disposable items: No\n")
-        //     .actionFeed(1.0)
+        printerBuilder
+            .actionFeed(0.5)
+            .actionPrintRuledLine(RuledLineParameter(72.0).setThickness(0.1))
+            .actionFeed(0.5)
 
-        printerBuilder.actionPrintRuledLine(RuledLineParameter(72.0).setThickness(0.1))
-        .actionFeed(1.0)
+        if (note.isNotEmpty()) {
+            printerBuilder
+                .styleBold(true)
+                .actionPrintText("Order Note: \n")
+                .styleBold(false)
+                .actionPrintText("$note\n")
+                .actionFeed(0.5)
+                .actionPrintRuledLine(RuledLineParameter(72.0).setThickness(0.1))
+                .actionFeed(0.5)
+        }
 
-        // Items
         for (item in items) {
             val itemMap = item as? Map<*, *> ?: continue
             val quantity = (itemMap["quantity"] as? Number)?.toInt() ?: 1
             val name = (itemMap["name"] as? String) ?: ""
-            val price = (itemMap["price"] as? Number)?.toDouble() ?: 0.0
             val modifiers = (itemMap["modifiers"] as? List<*>) ?: emptyList<Any>()
             val itemNote = (itemMap["itemNote"] as? String) ?: ""
 
-            // Item line: quantity x name (no price for kitchen) - 2x2 size, bold
             printerBuilder
-                .styleMagnification(MagnificationParameter(2, 2))
                 .styleBold(true)
-                .actionPrintText("$quantity x $name\n")
-                .styleMagnification(MagnificationParameter(2, 1))
+                .actionPrintText("$name\n")
                 .styleBold(false)
+                .actionPrintText(
+                    quantity.toString() + "\n",
+                    TextParameter().setWidth(72, TextWidthParameter().setAlignment(TextAlignment.Right))
+                )
 
-            // Modifiers (no price for kitchen)
             for (modifier in modifiers) {
                 val modMap = modifier as? Map<*, *> ?: continue
                 val modName = (modMap["name"] as? String) ?: ""
-                printerBuilder.actionPrintText("  $modName\n")
+                printerBuilder.actionPrintText("• $modName\n")
             }
 
-            // Item note with inverted style and 2x2 size (same as order note)
             if (itemNote.isNotEmpty()) {
-                printerBuilder
-                    .actionFeed(0.5)
-                    .add(
-                        PrinterBuilder()
-                            .styleMagnification(MagnificationParameter(2, 2))
-                            .styleInvert(true)
-                            .styleBold(true)
-                            .actionPrintText("Note: $itemNote\n")
-                    )
+                printerBuilder.actionPrintText("Order Note: $itemNote\n")
             }
 
             printerBuilder.actionFeedLine(1)
         }
 
-        printerBuilder.actionPrintRuledLine(RuledLineParameter(72.0).setThickness(0.1))
-        .actionFeed(1.0)
+        printerBuilder
+            .actionPrintRuledLine(RuledLineParameter(72.0).setThickness(0.1))
+            .actionFeed(0.8)
 
-        // Timestamps
         if (placedAt.isNotEmpty()) {
-            printerBuilder
-                .actionFeed(1.0)
-                .actionPrintText("Placed at: $placedAt\n")
+            printerBuilder.actionPrintText("Placed at: $placedAt\n")
         }
         if (dueAt.isNotEmpty()) {
             printerBuilder.actionPrintText("Due at: $dueAt\n")
         }
 
-        // Order note with inverted style and 2x2 size
-        if (note.isNotEmpty()) {
-            printerBuilder
-                .actionFeed(1.0)
-                .add(
-                    PrinterBuilder()
-                        .styleMagnification(MagnificationParameter(2, 2))
-                        .styleInvert(true)
-                        .styleBold(true)
-                        .actionPrintText("Order Note: $note\n")
-                )
-        }
-
         printerBuilder
-        .actionFeed(1.0)
-        .actionPrintRuledLine(RuledLineParameter(72.0).setThickness(0.1))
-        .actionFeed(1.0)
-        .actionCut(CutType.Partial)
+            .actionFeed(1.0)
+            .actionCut(CutType.Partial)
 
         return printerBuilder
     }

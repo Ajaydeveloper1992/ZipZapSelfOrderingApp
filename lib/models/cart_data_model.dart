@@ -1,4 +1,5 @@
 /// Shared cart data models used by cart drawers and modals
+library;
 
 class CartData {
   final String? note;

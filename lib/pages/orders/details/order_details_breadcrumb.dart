@@ -10,6 +10,7 @@ import 'package:zipzap_pos_self_orders/modals/refund_modal.dart';
 import 'package:zipzap_pos_self_orders/modals/email_receipt_modal.dart';
 import 'package:zipzap_pos_self_orders/services/orders_service.dart';
 import 'package:zipzap_pos_self_orders/providers/data_provider.dart';
+import 'package:zipzap_pos_self_orders/widgets/request_bell_button.dart';
 
 class OrderDetailsBreadcrumb extends StatefulWidget {
   final Order order;
@@ -389,6 +390,20 @@ class _OrderDetailsBreadcrumbState extends State<OrderDetailsBreadcrumb> {
             runSpacing: 8,
             alignment: WrapAlignment.end,
             children: [
+              // Request Bell Button - for dine-in orders
+              if (widget.order.orderType == 'Dine-in')
+                RequestBellButton(
+                  order: widget.order,
+                  storeId: widget.order.store?.id,
+                  showLabel: true,
+                  onRequestSent: (_) {
+                    AppToast.success(
+                      context: context,
+                      title: 'Request Sent',
+                      description: 'Staff will assist you shortly',
+                    );
+                  },
+                ),
               OutlinedButton.icon(
                 onPressed: () => _showContactModal(context),
                 icon: const Icon(Icons.phone, size: 16),

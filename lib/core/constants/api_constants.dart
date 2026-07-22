@@ -48,6 +48,7 @@ class ApiConstants {
   static const String userProfile = '/users/profile';
   static const String floorPlans = '/floor-plans';
   static const String timeClock = '/time-clock';
+  static const String selfOrderRequests = '/self-order-requests';
 
   // Query Parameters
   static const String orderTypeParam = 'orderType';

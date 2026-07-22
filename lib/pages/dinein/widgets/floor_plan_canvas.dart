@@ -273,7 +273,7 @@ class _FloorPlanCanvasState extends State<FloorPlanCanvas> {
   }
 
   Widget _buildCashRegister(double width, double height) {
-    return Container(
+    return SizedBox(
       width: width,
       height: height,
       child: Column(

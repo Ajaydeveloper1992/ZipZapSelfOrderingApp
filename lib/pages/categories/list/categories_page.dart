@@ -23,7 +23,7 @@ class _CategoriesPageState extends State<CategoriesPage> {
   List<Category> _paginatedCategories = [];
   Set<String> _selectedCategoryIds = {};
   bool _selectAll = false;
-  Set<String> _updatingCategoryIds = {};
+  final Set<String> _updatingCategoryIds = {};
 
   // Filter state
   String _selectedStatus = 'all';

@@ -33,7 +33,7 @@ class _OrderDetailsDrawerState extends State<OrderDetailsDrawer> {
   bool _isVoidingOrder = false;
   bool _isPrintingCustomer = false;
   bool _isPrintingKitchen = false;
-  bool _isSendingContact = false;
+  final bool _isSendingContact = false;
   bool _isUpdatingPickupTime = false;
   final OrdersService _ordersService = OrdersService();
   final CustomersService _customersService = CustomersService();

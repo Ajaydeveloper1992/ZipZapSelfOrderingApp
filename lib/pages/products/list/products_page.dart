@@ -22,7 +22,7 @@ class _ProductsPageState extends State<ProductsPage> {
   List<Product> _paginatedProducts = [];
   Set<String> _selectedProductIds = {};
   bool _selectAll = false;
-  Set<String> _updatingProductIds = {};
+  final Set<String> _updatingProductIds = {};
 
   // Filter state
   String _selectedStatus = 'all';

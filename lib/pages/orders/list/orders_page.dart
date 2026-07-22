@@ -9,6 +9,7 @@ import 'package:zipzap_pos_self_orders/pages/takeouts/widgets/order_details_draw
 import 'package:zipzap_pos_self_orders/services/orders_service.dart';
 import 'package:zipzap_pos_self_orders/core/services/auth_service.dart';
 import 'package:zipzap_pos_self_orders/providers/data_provider.dart';
+import 'package:zipzap_pos_self_orders/widgets/request_bell_button.dart';
 
 class OrdersPage extends StatefulWidget {
   const OrdersPage({super.key});
@@ -752,6 +753,24 @@ class _OrdersPageState extends State<OrdersPage> {
                           Row(
                             mainAxisAlignment: MainAxisAlignment.end,
                             children: [
+                              // Request Button for Dine-in orders
+                              if (order.orderType == 'Dine-in')
+                                SizedBox(
+                                  width: 40,
+                                  height: 40,
+                                  child: RequestBellButton(
+                                    order: order,
+                                    storeId: order.store?.id,
+                                    showLabel: false,
+                                    padding: EdgeInsets.zero,
+                                    size: 16,
+                                    onRequestSent: (_) {
+                                      setState(() {
+                                        // Update UI to show request sent
+                                      });
+                                    },
+                                  ),
+                                ),
                               IconButton.outlined(
                                 icon: const Icon(Icons.visibility, size: 16),
                                 onPressed: () {
