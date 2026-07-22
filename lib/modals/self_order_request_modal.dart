@@ -145,12 +145,14 @@ class _SelfOrderRequestModalState extends State<SelfOrderRequestModal> {
                       width: 48,
                       height: 48,
                       decoration: BoxDecoration(
-                        color: const Color(0xFFFEF3C7),
+                        color: Theme.of(
+                          context,
+                        ).primaryColor.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(12),
                       ),
-                      child: const Icon(
+                      child: Icon(
                         Icons.notifications_active,
-                        color: Color(0xFFD97706),
+                        color: Theme.of(context).primaryColor,
                         size: 24,
                       ),
                     ),
@@ -159,12 +161,15 @@ class _SelfOrderRequestModalState extends State<SelfOrderRequestModal> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text(
+                          Text(
                             'Request Assistance',
-                            style: TextStyle(
-                              fontSize: 20,
-                              fontWeight: FontWeight.bold,
-                            ),
+                            style:
+                                Theme.of(context).textTheme.headlineSmall
+                                    ?.copyWith(fontWeight: FontWeight.bold) ??
+                                const TextStyle(
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.bold,
+                                ),
                           ),
                           Text(
                             'Order #${widget.order.orderNumber}',
@@ -187,11 +192,16 @@ class _SelfOrderRequestModalState extends State<SelfOrderRequestModal> {
                 // Instructions
                 Text(
                   'What do you need?',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.grey.shade800,
-                  ),
+                  style:
+                      Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                        color: Colors.grey.shade800,
+                      ) ??
+                      TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.grey.shade800,
+                      ),
                 ),
                 const SizedBox(height: 12),
 
@@ -224,7 +234,7 @@ class _SelfOrderRequestModalState extends State<SelfOrderRequestModal> {
                         ),
                       ),
                       backgroundColor: Colors.grey.shade200,
-                      selectedColor: const Color(0xFF3B82F6),
+                      selectedColor: Theme.of(context).primaryColor,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(20),
                       ),
@@ -255,14 +265,17 @@ class _SelfOrderRequestModalState extends State<SelfOrderRequestModal> {
                                   _customRequestController.clear();
                                 }
                               },
-                              activeColor: const Color(0xFF3B82F6),
+                              activeColor: Theme.of(context).primaryColor,
                             ),
-                            const Text(
+                            Text(
                               'Other request',
-                              style: TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w500,
-                              ),
+                              style:
+                                  Theme.of(context).textTheme.bodyMedium
+                                      ?.copyWith(fontWeight: FontWeight.w500) ??
+                                  const TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w500,
+                                  ),
                             ),
                           ],
                         ),
@@ -293,8 +306,8 @@ class _SelfOrderRequestModalState extends State<SelfOrderRequestModal> {
                               ),
                               focusedBorder: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(8),
-                                borderSide: const BorderSide(
-                                  color: Color(0xFF3B82F6),
+                                borderSide: BorderSide(
+                                  color: Theme.of(context).primaryColor,
                                   width: 2,
                                 ),
                               ),
@@ -302,7 +315,7 @@ class _SelfOrderRequestModalState extends State<SelfOrderRequestModal> {
                               fillColor: Colors.white,
                               contentPadding: const EdgeInsets.all(12),
                             ),
-                            style: const TextStyle(fontSize: 14),
+                            style: Theme.of(context).textTheme.bodyMedium,
                           ),
                         ],
                       ],
@@ -321,15 +334,19 @@ class _SelfOrderRequestModalState extends State<SelfOrderRequestModal> {
                             : () => Navigator.of(context).pop(),
                         style: OutlinedButton.styleFrom(
                           padding: const EdgeInsets.symmetric(vertical: 12),
-                          side: BorderSide(color: Colors.grey.shade300),
+                          side: BorderSide(
+                            color: Theme.of(
+                              context,
+                            ).primaryColor.withValues(alpha: 0.3),
+                          ),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(8),
                           ),
                         ),
-                        child: const Text(
+                        child: Text(
                           'Cancel',
                           style: TextStyle(
-                            color: Color(0xFF6B7280),
+                            color: Colors.grey.shade600,
                             fontWeight: FontWeight.w600,
                           ),
                         ),
@@ -341,7 +358,7 @@ class _SelfOrderRequestModalState extends State<SelfOrderRequestModal> {
                         onPressed: _isSubmitting ? null : _submitRequest,
                         style: ElevatedButton.styleFrom(
                           padding: const EdgeInsets.symmetric(vertical: 12),
-                          backgroundColor: const Color(0xFF3B82F6),
+                          backgroundColor: Theme.of(context).primaryColor,
                           disabledBackgroundColor: Colors.grey.shade300,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(8),
@@ -359,7 +376,7 @@ class _SelfOrderRequestModalState extends State<SelfOrderRequestModal> {
                                 ),
                               )
                             : const Text(
-                                'Send Request',
+                                'Send Request ',
                                 style: TextStyle(
                                   color: Colors.white,
                                   fontWeight: FontWeight.w600,

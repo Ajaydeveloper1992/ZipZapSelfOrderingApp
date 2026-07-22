@@ -1098,7 +1098,7 @@ class _HomePageState extends State<HomePage> {
       route: '#update_orders',
     ),
     DashboardItem(
-      title: 'Send Request',
+      title: 'Call Server',
       description: 'Request assistance from staff',
       icon: Icons.notifications_active,
       backgroundColor: Colors.amber.shade100,
