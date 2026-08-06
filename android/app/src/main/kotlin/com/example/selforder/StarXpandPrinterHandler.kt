@@ -9,8 +9,12 @@ import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
+import android.graphics.RectF
 import android.graphics.Typeface
+import android.content.ContentValues
 import android.os.Build
+import android.os.Environment
+import android.provider.MediaStore
 import android.util.Log
 import android.util.Base64
 import androidx.core.app.ActivityCompat
@@ -22,6 +26,9 @@ import com.starmicronics.stario10.starxpandcommand.drawer.*
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import kotlinx.coroutines.*
+import java.io.File
+import java.io.FileOutputStream
+import java.io.OutputStream
 
 class StarXpandPrinterHandler(private val context: Context) : MethodChannel.MethodCallHandler {
     private var discoveryManager: StarDeviceDiscoveryManager? = null
@@ -31,7 +38,6 @@ class StarXpandPrinterHandler(private val context: Context) : MethodChannel.Meth
     private val PERMISSION_REQUEST_CODE = 1001
     private val printableAreaMm = 72.0
     private val printableRasterWidthPx = 576
-    private val printableRasterResolution = 72
 
     private data class PrintDocument(
         val commandBuilder: PrinterBuilder,
@@ -105,6 +111,7 @@ class StarXpandPrinterHandler(private val context: Context) : MethodChannel.Meth
 
         return try {
             val imageBytes = Base64.decode(imageBase64, Base64.DEFAULT)
+            saveFlutterReceiptPng(imageBytes)
             BitmapFactory.decodeByteArray(imageBytes, 0, imageBytes.size)
         } catch (e: Exception) {
             Log.e("StarXpand", "Failed to decode receipt image fallback: ${e.message}", e)
@@ -112,11 +119,120 @@ class StarXpandPrinterHandler(private val context: Context) : MethodChannel.Meth
         }
     }
 
+    private fun prepareReceiptImageBitmap(source: Bitmap): Bitmap {
+        if (source.width <= 0 || source.height <= 0) {
+            return source
+        }
+
+        val sourceWidth = source.width
+        val sourceHeight = source.height
+        val targetWidth = printableRasterWidthPx
+        val targetHeight = ((sourceHeight.toDouble() * targetWidth) / sourceWidth)
+            .toInt()
+            .coerceAtLeast(1)
+        val receiptBitmap = Bitmap.createBitmap(targetWidth, targetHeight, Bitmap.Config.RGB_565)
+        val canvas = Canvas(receiptBitmap)
+        canvas.drawColor(Color.WHITE)
+
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG or Paint.DITHER_FLAG)
+        canvas.drawBitmap(
+            source,
+            null,
+            RectF(0f, 0f, targetWidth.toFloat(), targetHeight.toFloat()),
+            paint
+        )
+
+        if (source != receiptBitmap && !source.isRecycled) {
+            source.recycle()
+        }
+
+        Log.d(
+            "StarXpand",
+            "Prepared receipt image ${sourceWidth}x${sourceHeight} -> ${receiptBitmap.width}x${receiptBitmap.height}"
+        )
+        return receiptBitmap
+    }
+
+    private fun saveFlutterReceiptPng(imageBytes: ByteArray) {
+        if (!BuildConfig.DEBUG) return
+
+        try {
+            val file = File(context.cacheDir, "flutter_receipt.png")
+            file.writeBytes(imageBytes)
+            Log.d("StarXpand", "Saved original Flutter receipt PNG: ${file.absolutePath}")
+        } catch (e: Exception) {
+            Log.e("StarXpand", "Failed to save original Flutter receipt PNG: ${e.message}", e)
+        }
+
+        saveDebugPngToDownloads("flutter_receipt.png") { output ->
+            output.write(imageBytes)
+        }
+    }
+
+    private fun saveDebugReceiptBitmap(bitmap: Bitmap) {
+        if (!BuildConfig.DEBUG) return
+
+        try {
+            val file = File(context.cacheDir, "debug_receipt.png")
+            FileOutputStream(file).use { output ->
+                bitmap.compress(Bitmap.CompressFormat.PNG, 100, output)
+            }
+            Log.d("StarXpand", "Saved final receipt bitmap: ${file.absolutePath}")
+        } catch (e: Exception) {
+            Log.e("StarXpand", "Failed to save final receipt bitmap: ${e.message}", e)
+        }
+
+        saveDebugPngToDownloads("debug_receipt.png") { output ->
+            bitmap.compress(Bitmap.CompressFormat.PNG, 100, output)
+        }
+    }
+
+    private fun saveDebugPngToDownloads(fileName: String, writePng: (OutputStream) -> Unit) {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                val values = ContentValues().apply {
+                    put(MediaStore.MediaColumns.DISPLAY_NAME, fileName)
+                    put(MediaStore.MediaColumns.MIME_TYPE, "image/png")
+                    put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS)
+                    put(MediaStore.MediaColumns.IS_PENDING, 1)
+                }
+                val resolver = context.contentResolver
+                val uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
+                    ?: throw IllegalStateException("Unable to create MediaStore Downloads entry")
+
+                resolver.openOutputStream(uri)?.use(writePng)
+                    ?: throw IllegalStateException("Unable to open MediaStore output stream")
+
+                values.clear()
+                values.put(MediaStore.MediaColumns.IS_PENDING, 0)
+                resolver.update(uri, values, null, null)
+                Log.d("StarXpand", "Saved debug receipt image to Downloads: $uri")
+            } else {
+                val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+                if (!downloadsDir.exists()) {
+                    downloadsDir.mkdirs()
+                }
+                val file = File(downloadsDir, fileName)
+                FileOutputStream(file).use(writePng)
+                Log.d("StarXpand", "Saved debug receipt image to Downloads: ${file.absolutePath}")
+            }
+        } catch (e: Exception) {
+            Log.e("StarXpand", "Failed to save $fileName to Downloads: ${e.message}", e)
+        }
+    }
+
     private fun buildImageReceipt(bitmap: Bitmap): PrinterBuilder {
-        val imgParam = ImageParameter(bitmap, printableRasterResolution)
+        val receiptBitmap = prepareReceiptImageBitmap(bitmap)
+        saveDebugReceiptBitmap(receiptBitmap)
         return PrinterBuilder()
-            .actionPrintImage(imgParam)
+            .actionPrintImage(createReceiptImageParameter(receiptBitmap))
             .actionCut(CutType.Partial)
+    }
+
+    private fun createReceiptImageParameter(bitmap: Bitmap): ImageParameter {
+        return ImageParameter(bitmap, printableRasterWidthPx)
+            .setEffectDiffusion(true)
+            .setThreshold(127)
     }
 
     private fun buildTextRasterReceipt(text: String): PrinterBuilder {
@@ -231,7 +347,6 @@ class StarXpandPrinterHandler(private val context: Context) : MethodChannel.Meth
         val interfaceTypeStr = call.argument<String>("interfaceType") ?: return result.error("INVALID_ARGUMENT", "interfaceType required", null)
         val identifier = call.argument<String>("identifier") ?: return result.error("INVALID_ARGUMENT", "identifier required", null)
         val imageBase64 = call.argument<String>("imageBase64") ?: return result.error("INVALID_ARGUMENT", "imageBase64 required", null)
-        val paperWidthMm = call.argument<Double>("paperWidthMm") ?: printableAreaMm
 
         val interfaceType = when (interfaceTypeStr) {
             "Lan" -> InterfaceType.Lan
@@ -243,6 +358,7 @@ class StarXpandPrinterHandler(private val context: Context) : MethodChannel.Meth
         coroutineScope.launch(Dispatchers.IO) {
             try {
                 val imageBytes = Base64.decode(imageBase64, Base64.DEFAULT)
+                saveFlutterReceiptPng(imageBytes)
 
                 val settings = StarConnectionSettings(interfaceType, identifier)
                 val printer = StarPrinter(settings, context)
@@ -253,14 +369,16 @@ class StarXpandPrinterHandler(private val context: Context) : MethodChannel.Meth
 
                 // Build a simple document that prints the image and then cuts
                 val bitmap = BitmapFactory.decodeByteArray(imageBytes, 0, imageBytes.size)
-                val imgParam = ImageParameter(bitmap, paperWidthMm.toInt())
+                    ?: throw IllegalArgumentException("Unable to decode imageBase64")
+                val receiptBitmap = prepareReceiptImageBitmap(bitmap)
+                saveDebugReceiptBitmap(receiptBitmap)
                 val printerBuilder = PrinterBuilder()
-                    .actionPrintImage(imgParam)
+                    .actionPrintImage(createReceiptImageParameter(receiptBitmap))
                     .actionCut(CutType.Partial)
 
                 builder.addDocument(
                     DocumentBuilder()
-                        .settingPrintableArea(paperWidthMm)
+                        .settingPrintableArea(printableAreaMm)
                         .addPrinter(printerBuilder)
                 )
 
