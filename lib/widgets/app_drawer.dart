@@ -129,6 +129,11 @@ class _AppDrawerState extends State<AppDrawer> {
       {'title': 'Categories', 'icon': Icons.list, 'route': '/categories/list'},
       {'title': 'Customers', 'icon': Icons.people, 'route': '/customers'},
       {'title': 'Report', 'icon': Icons.description, 'route': '/report'},
+      {
+        'title': 'Receipt Preview',
+        'icon': Icons.receipt_long,
+        'route': '/receipt-preview',
+      },
       {'title': 'Settings', 'icon': Icons.settings, 'route': '/settings'},
       {'title': 'My Account', 'icon': Icons.person, 'route': '/profile'},
       {'title': 'Printer Settings', 'icon': Icons.print, 'route': '/printers'},

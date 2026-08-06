@@ -48,6 +48,7 @@ class _HomePageState extends State<HomePage> {
   bool _hasAssignedTable = false;
   bool _hasAssignedTableActiveOrder = false;
   bool _hasCashDrawerPermission = false;
+  bool _callServerEnabled = true;
   final bool _isUpdatingStoreStatus = false;
   Timer? _hiddenSettingsTimer;
   bool _hiddenSettingsActive = false;
@@ -58,6 +59,7 @@ class _HomePageState extends State<HomePage> {
     // Initialize _dashboardItems BEFORE setting up listener
     _dashboardItems = _getInitialDashboardItems();
     _refreshDashboardItems();
+    _loadCallServerSetting();
     _setupDataProviderListener();
     _checkAndShowProgressDialog();
     _loadStoreData();
@@ -335,6 +337,13 @@ class _HomePageState extends State<HomePage> {
             enabled: _hasAssignedTable ? _hasAssignedTableActiveOrder : false,
           );
         }
+        if (item.route == '#self_order_request') {
+          // Respect both assigned-table state and the persisted Call Server preference
+          final enabledByTable = _hasAssignedTable
+              ? _hasAssignedTableActiveOrder
+              : false;
+          return item.copyWith(enabled: enabledByTable && _callServerEnabled);
+        }
         return item;
       }).toList();
     });
@@ -342,7 +351,7 @@ class _HomePageState extends State<HomePage> {
 
   void _startHiddenSettingsTimer() {
     _hiddenSettingsTimer?.cancel();
-    _hiddenSettingsTimer = Timer(const Duration(seconds: 3), () {
+    _hiddenSettingsTimer = Timer(const Duration(seconds: 2), () {
       _hiddenSettingsTimer = null;
       _openHiddenSettingsIfAuthorized();
     });
@@ -375,8 +384,25 @@ class _HomePageState extends State<HomePage> {
           ),
         ),
       );
+      // After returning from advanced settings, reload the Call Server preference
+      await _loadCallServerSetting();
     } finally {
       _hiddenSettingsActive = false;
+    }
+  }
+
+  Future<void> _loadCallServerSetting() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final enabled = prefs.getBool('call_server_enabled');
+      if (mounted) {
+        setState(() {
+          _callServerEnabled = enabled ?? true;
+        });
+        _refreshDashboardItems();
+      }
+    } catch (e) {
+      debugPrint('Failed to load call server preference: $e');
     }
   }
 
@@ -1104,6 +1130,14 @@ class _HomePageState extends State<HomePage> {
       backgroundColor: Colors.amber.shade100,
       borderColor: Colors.amber.shade300,
       route: '#self_order_request',
+    ),
+    DashboardItem(
+      title: 'Receipt Preview',
+      description: 'View and print customer or kitchen receipts',
+      icon: Icons.receipt_long,
+      backgroundColor: Colors.green.shade100,
+      borderColor: Colors.green.shade300,
+      route: '/receipt-preview',
     ),
     // DashboardItem(
     //   title: 'Takeout',

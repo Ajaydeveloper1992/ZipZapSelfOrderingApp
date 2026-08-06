@@ -11,6 +11,33 @@ class PrinterService {
   );
   static const String _storageKey = 'saved_printers';
 
+  static Future<Map<String, dynamic>> _printerMetadataArgs(
+    String identifier,
+  ) async {
+    try {
+      final printers = await getSavedPrinters();
+      Printer? printer;
+      for (final savedPrinter in printers) {
+        if (savedPrinter.identifier == identifier ||
+            savedPrinter.id == identifier) {
+          printer = savedPrinter;
+          break;
+        }
+      }
+
+      if (printer == null) return {};
+
+      return {
+        if (printer.modelName != null && printer.modelName!.isNotEmpty)
+          'modelName': printer.modelName,
+        if (printer.name.isNotEmpty) 'printerName': printer.name,
+      };
+    } catch (e) {
+      debugPrint('Error loading printer metadata: $e');
+      return {};
+    }
+  }
+
   // Request Bluetooth permissions
   static Future<bool> requestBluetoothPermissions() async {
     try {
@@ -94,6 +121,7 @@ class PrinterService {
       final result = await _channel.invokeMethod<bool>('printTest', {
         'interfaceType': interfaceType,
         'identifier': identifier,
+        ...await _printerMetadataArgs(identifier),
       });
       return result ?? false;
     } catch (e) {
@@ -114,6 +142,7 @@ class PrinterService {
         'interfaceType': interfaceType,
         'identifier': identifier,
         'imageBase64': imageBase64,
+        ...await _printerMetadataArgs(identifier),
         if (targetType != null) 'type': targetType,
       });
       return result ?? false;
@@ -144,6 +173,7 @@ class PrinterService {
       final result = await _channel.invokeMethod<bool>('printKitchenOrder', {
         'interfaceType': interfaceType,
         'identifier': identifier,
+        ...await _printerMetadataArgs(identifier),
         'orderData': orderData,
       });
       return result ?? false;
@@ -174,6 +204,7 @@ class PrinterService {
       final result = await _channel.invokeMethod<bool>('printCustomerReceipt', {
         'interfaceType': interfaceType,
         'identifier': identifier,
+        ...await _printerMetadataArgs(identifier),
         'orderData': orderData,
       });
       return result ?? false;
@@ -193,6 +224,7 @@ class PrinterService {
       final result = await _channel.invokeMethod<bool>('printQuote', {
         'interfaceType': interfaceType,
         'identifier': identifier,
+        ...await _printerMetadataArgs(identifier),
         'orderData': orderData,
       });
       return result ?? false;
@@ -212,6 +244,7 @@ class PrinterService {
       final result = await _channel.invokeMethod<bool>('printReport', {
         'interfaceType': interfaceType,
         'identifier': identifier,
+        ...await _printerMetadataArgs(identifier),
         'reportData': reportData,
       });
       return result ?? false;
@@ -231,6 +264,7 @@ class PrinterService {
       final result = await _channel.invokeMethod<bool>('printVoidReceipt', {
         'interfaceType': interfaceType,
         'identifier': identifier,
+        ...await _printerMetadataArgs(identifier),
         'orderData': orderData,
       });
       return result ?? false;

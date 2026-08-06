@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
-class AdvancedSettingsPage extends StatelessWidget {
+class AdvancedSettingsPage extends StatefulWidget {
   const AdvancedSettingsPage({
     super.key,
     this.onPartySizeSettings,
@@ -15,6 +16,46 @@ class AdvancedSettingsPage extends StatelessWidget {
   final Future<void> Function()? onAssignTable;
   final Future<void> Function()? onLogout;
   final VoidCallback? onOpenPrinters;
+
+  @override
+  State<AdvancedSettingsPage> createState() => _AdvancedSettingsPageState();
+}
+
+class _AdvancedSettingsPageState extends State<AdvancedSettingsPage> {
+  static const _prefKey = 'call_server_enabled';
+  bool _callServerEnabled = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadPrefs();
+  }
+
+  Future<void> _loadPrefs() async {
+    final prefs = await SharedPreferences.getInstance();
+    final val = prefs.getBool(_prefKey);
+    if (mounted) {
+      setState(() {
+        _callServerEnabled = val ?? true;
+      });
+    }
+  }
+
+  Future<void> _setCallServerEnabled(bool enabled) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_prefKey, enabled);
+    if (mounted) {
+      setState(() => _callServerEnabled = enabled);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(enabled
+              ? 'Call Server enabled for customers.'
+              : 'Call Server hidden from customers.'),
+          duration: const Duration(seconds: 1),
+        ),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -46,6 +87,21 @@ class AdvancedSettingsPage extends StatelessWidget {
                   color: theme.colorScheme.onSurfaceVariant,
                 ),
               ),
+              const SizedBox(height: 12),
+              Card(
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  side: BorderSide(color: theme.colorScheme.outlineVariant),
+                ),
+                child: SwitchListTile(
+                  title: const Text('Show "Call Server" on Home'),
+                  subtitle: const Text(
+                      'Allow customers to send assistance requests from the home dashboard.'),
+                  value: _callServerEnabled,
+                  onChanged: (v) => _setCallServerEnabled(v),
+                ),
+              ),
               const SizedBox(height: 20),
               Expanded(
                 child: ListView(
@@ -54,9 +110,9 @@ class AdvancedSettingsPage extends StatelessWidget {
                       icon: Icons.people_alt_outlined,
                       title: 'Party Size / Guest Settings',
                       subtitle: 'Manage guest and quick-select controls.',
-                      onTap: onPartySizeSettings != null
+                      onTap: widget.onPartySizeSettings != null
                           ? () async {
-                              await onPartySizeSettings?.call();
+                              await widget.onPartySizeSettings?.call();
                             }
                           : null,
                     ),
@@ -65,9 +121,9 @@ class AdvancedSettingsPage extends StatelessWidget {
                       icon: Icons.print,
                       title: 'Print Button Settings',
                       subtitle: 'Control which print buttons appear.',
-                      onTap: onPrintButtonSettings != null
+                      onTap: widget.onPrintButtonSettings != null
                           ? () async {
-                              await onPrintButtonSettings?.call();
+                              await widget.onPrintButtonSettings?.call();
                             }
                           : null,
                     ),
@@ -76,9 +132,9 @@ class AdvancedSettingsPage extends StatelessWidget {
                       icon: Icons.settings_applications_outlined,
                       title: 'Printer Settings',
                       subtitle: 'Configure connected printers.',
-                      onTap: onOpenPrinters != null
+                      onTap: widget.onOpenPrinters != null
                           ? () {
-                              onOpenPrinters?.call();
+                              widget.onOpenPrinters?.call();
                             }
                           : null,
                     ),
@@ -87,9 +143,9 @@ class AdvancedSettingsPage extends StatelessWidget {
                       icon: Icons.table_restaurant_outlined,
                       title: 'Assign Table for Customers',
                       subtitle: 'Assign an available table for self-ordering.',
-                      onTap: onAssignTable != null
+                      onTap: widget.onAssignTable != null
                           ? () async {
-                              await onAssignTable?.call();
+                              await widget.onAssignTable?.call();
                             }
                           : null,
                     ),
@@ -99,9 +155,9 @@ class AdvancedSettingsPage extends StatelessWidget {
                       title: 'Logout',
                       subtitle: 'Sign out from the current account.',
                       color: theme.colorScheme.error,
-                      onTap: onLogout != null
+                      onTap: widget.onLogout != null
                           ? () async {
-                              await onLogout?.call();
+                              await widget.onLogout?.call();
                             }
                           : null,
                     ),
