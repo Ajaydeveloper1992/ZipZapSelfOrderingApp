@@ -136,6 +136,7 @@ class PrinterService {
     required String identifier,
     required String imageBase64,
     String? targetType, // optional: 'kitchen' | 'customer' | 'quote'
+    double? paperWidthMm,
   }) async {
     try {
       final result = await _channel.invokeMethod<bool>('printImage', {
@@ -144,6 +145,7 @@ class PrinterService {
         'imageBase64': imageBase64,
         ...await _printerMetadataArgs(identifier),
         if (targetType != null) 'type': targetType,
+        if (paperWidthMm != null) 'paperWidthMm': paperWidthMm,
       });
       return result ?? false;
     } catch (e) {
@@ -162,11 +164,13 @@ class PrinterService {
       // If a rendered receipt image is provided, prefer printing the image
       final imageBase64 = orderData['receiptImage'] as String?;
       if (imageBase64 != null && imageBase64.isNotEmpty) {
+        final paperWidthMm = (orderData['paperWidthMm'] as num?)?.toDouble();
         return await printImage(
           interfaceType: interfaceType,
           identifier: identifier,
           imageBase64: imageBase64,
           targetType: 'kitchen',
+          paperWidthMm: paperWidthMm,
         );
       }
 
@@ -193,11 +197,13 @@ class PrinterService {
       // If a rendered receipt image is provided, prefer printing the image
       final imageBase64 = orderData['receiptImage'] as String?;
       if (imageBase64 != null && imageBase64.isNotEmpty) {
+        final paperWidthMm = (orderData['paperWidthMm'] as num?)?.toDouble();
         return await printImage(
           interfaceType: interfaceType,
           identifier: identifier,
           imageBase64: imageBase64,
           targetType: 'customer',
+          paperWidthMm: paperWidthMm,
         );
       }
 

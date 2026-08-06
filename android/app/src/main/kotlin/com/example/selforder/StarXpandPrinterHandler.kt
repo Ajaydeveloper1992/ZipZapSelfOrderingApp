@@ -231,6 +231,7 @@ class StarXpandPrinterHandler(private val context: Context) : MethodChannel.Meth
         val interfaceTypeStr = call.argument<String>("interfaceType") ?: return result.error("INVALID_ARGUMENT", "interfaceType required", null)
         val identifier = call.argument<String>("identifier") ?: return result.error("INVALID_ARGUMENT", "identifier required", null)
         val imageBase64 = call.argument<String>("imageBase64") ?: return result.error("INVALID_ARGUMENT", "imageBase64 required", null)
+        val paperWidthMm = call.argument<Double>("paperWidthMm") ?: printableAreaMm
 
         val interfaceType = when (interfaceTypeStr) {
             "Lan" -> InterfaceType.Lan
@@ -252,14 +253,14 @@ class StarXpandPrinterHandler(private val context: Context) : MethodChannel.Meth
 
                 // Build a simple document that prints the image and then cuts
                 val bitmap = BitmapFactory.decodeByteArray(imageBytes, 0, imageBytes.size)
-                val imgParam = ImageParameter(bitmap, 72)
+                val imgParam = ImageParameter(bitmap, paperWidthMm.toInt())
                 val printerBuilder = PrinterBuilder()
                     .actionPrintImage(imgParam)
                     .actionCut(CutType.Partial)
 
                 builder.addDocument(
                     DocumentBuilder()
-                        .settingPrintableArea(72.0)
+                        .settingPrintableArea(paperWidthMm)
                         .addPrinter(printerBuilder)
                 )
 

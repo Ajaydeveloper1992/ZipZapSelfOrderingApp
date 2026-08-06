@@ -14,50 +14,117 @@ class ReceiptPreviewPage extends StatefulWidget {
   State<ReceiptPreviewPage> createState() => _ReceiptPreviewPageState();
 }
 
-class _ReceiptPreviewPageState extends State<ReceiptPreviewPage> {
+class _ReceiptPreviewPageState extends State<ReceiptPreviewPage>
+    with SingleTickerProviderStateMixin {
   final GlobalKey _customerReceiptKey = GlobalKey();
   final GlobalKey _kitchenReceiptKey = GlobalKey();
+  late final TabController _tabController;
   bool _isPrinting = false;
+
+  GlobalKey get _activeReceiptKey =>
+      _tabController.index == 0 ? _customerReceiptKey : _kitchenReceiptKey;
+
+  ReceiptType get _activeReceiptType =>
+      _tabController.index == 0 ? ReceiptType.customer : ReceiptType.kitchen;
+
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: 2, vsync: this);
+    _tabController.addListener(() {
+      if (!_tabController.indexIsChanging && mounted) {
+        setState(() {});
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    return DefaultTabController(
-      length: 2,
-      child: Scaffold(
-        appBar: AppBar(
-          title: const Text('Receipt Preview'),
-          bottom: const TabBar(
-            indicatorColor: Colors.white,
-            tabs: [
-              Tab(text: 'Customer Receipt'),
-              Tab(text: 'Kitchen Receipt'),
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Receipt Preview'),
+        bottom: TabBar(
+          controller: _tabController,
+          indicatorColor: Colors.white,
+          tabs: const [
+            Tab(text: 'Customer Receipt'),
+            Tab(text: 'Kitchen Receipt'),
+          ],
+        ),
+      ),
+      body: Container(
+        color: Colors.grey.shade100,
+        child: TabBarView(
+          controller: _tabController,
+          children: [
+            _buildReceiptTab(
+              repaintKey: _customerReceiptKey,
+              receipt: CustomerReceipt(
+                model: _customerReceiptModel,
+                width: ReceiptCaptureHelper.width4Inch,
+              ),
+            ),
+            _buildReceiptTab(
+              repaintKey: _kitchenReceiptKey,
+              receipt: KitchenReceipt(
+                model: _kitchenReceiptModel,
+                width: ReceiptCaptureHelper.width4Inch,
+              ),
+            ),
+          ],
+        ),
+      ),
+      bottomNavigationBar: SafeArea(
+        top: false,
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
+          decoration: BoxDecoration(
+            color: Theme.of(context).scaffoldBackgroundColor,
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withAlpha(20),
+                blurRadius: 12,
+                offset: const Offset(0, -4),
+              ),
             ],
           ),
-        ),
-        body: Container(
-          color: Colors.grey.shade100,
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: TabBarView(
-              children: [
-                _buildReceiptTab(
-                  repaintKey: _customerReceiptKey,
-                  receipt: CustomerReceipt(
-                    model: _customerReceiptModel,
-                    width: ReceiptCaptureHelper.width80mm,
-                  ),
-                  type: ReceiptType.customer,
+          child: Row(
+            children: [
+              Expanded(
+                child: FilledButton.icon(
+                  onPressed: _isPrinting
+                      ? null
+                      : () => _printReceipt(
+                          receiptType: _activeReceiptType,
+                          repaintKey: _activeReceiptKey,
+                        ),
+                  icon: _isPrinting
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.print),
+                  label: const Text('Print'),
                 ),
-                _buildReceiptTab(
-                  repaintKey: _kitchenReceiptKey,
-                  receipt: KitchenReceipt(
-                    model: _kitchenReceiptModel,
-                    width: ReceiptCaptureHelper.width80mm,
-                  ),
-                  type: ReceiptType.kitchen,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: _isPrinting
+                      ? null
+                      : () => _captureReceipt(repaintKey: _activeReceiptKey),
+                  icon: const Icon(Icons.image),
+                  label: const Text('Capture PNG'),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),
@@ -67,21 +134,21 @@ class _ReceiptPreviewPageState extends State<ReceiptPreviewPage> {
   Widget _buildReceiptTab({
     required GlobalKey repaintKey,
     required Widget receipt,
-    required ReceiptType type,
   }) {
-    return Center(
-      child: SingleChildScrollView(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(16),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(16, 18, 16, 24),
+          child: Align(
+            alignment: Alignment.topCenter,
+            child: Container(
+              width: ReceiptCaptureHelper.width4Inch,
+              constraints: BoxConstraints(maxWidth: constraints.maxWidth - 32),
               decoration: BoxDecoration(
                 color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withAlpha(13),
+                    color: Colors.black.withAlpha(18),
                     blurRadius: 14,
                     offset: const Offset(0, 6),
                   ),
@@ -89,45 +156,18 @@ class _ReceiptPreviewPageState extends State<ReceiptPreviewPage> {
               ),
               child: RepaintBoundary(key: repaintKey, child: receipt),
             ),
-            const SizedBox(height: 18),
-            Row(
-              children: [
-                Expanded(
-                  child: FilledButton(
-                    onPressed: () => _printReceipt(
-                      receiptType: type,
-                      repaintKey: repaintKey,
-                    ),
-                    child: _isPrinting
-                        ? const SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(
-                              color: Colors.white,
-                              strokeWidth: 2,
-                            ),
-                          )
-                        : const Text('Print'),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: () => _captureReceipt(repaintKey: repaintKey),
-                    child: const Text('Capture PNG'),
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 
   Future<void> _captureReceipt({required GlobalKey repaintKey}) async {
     try {
-      await ReceiptCaptureHelper.captureAsPng(repaintKey, pixelRatio: 4.0);
+      await ReceiptCaptureHelper.captureAsPng(
+        repaintKey,
+        pixelRatio: ReceiptCaptureHelper.capturePixelRatio4Inch,
+      );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Receipt captured successfully.')),
@@ -169,9 +209,12 @@ class _ReceiptPreviewPageState extends State<ReceiptPreviewPage> {
 
       final receiptBase64 = await ReceiptCaptureHelper.captureAsBase64(
         repaintKey,
-        pixelRatio: 4.0,
+        pixelRatio: ReceiptCaptureHelper.capturePixelRatio4Inch,
       );
-      final orderData = {'receiptImage': receiptBase64};
+      final orderData = {
+        'receiptImage': receiptBase64,
+        'paperWidthMm': ReceiptCaptureHelper.width4InchMm,
+      };
       var allSuccess = true;
 
       for (final printer in printersToUse) {

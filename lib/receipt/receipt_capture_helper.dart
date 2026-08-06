@@ -5,6 +5,9 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/widgets.dart';
 
 class ReceiptCaptureHelper {
+  static const double width4Inch = 384;
+  static const double width4InchMm = 101.6;
+  static const double capturePixelRatio4Inch = 2.12;
   static const double width80mm = 560;
   static const double width58mm = 420;
 
@@ -12,9 +15,14 @@ class ReceiptCaptureHelper {
     GlobalKey repaintKey, {
     double pixelRatio = 4.0,
   }) async {
+    await WidgetsBinding.instance.endOfFrame;
+
     final context = repaintKey.currentContext;
     if (context == null) {
       throw Exception('RepaintBoundary context not available.');
+    }
+    if (!context.mounted) {
+      throw Exception('RepaintBoundary context is no longer mounted.');
     }
 
     final boundary = context.findRenderObject() as RenderRepaintBoundary?;
