@@ -38,6 +38,8 @@ class StarXpandPrinterHandler(private val context: Context) : MethodChannel.Meth
     private val PERMISSION_REQUEST_CODE = 1001
     private val printableAreaMm = 72.0
     private val printableRasterWidthPx = 576
+    private val receiptImageThreshold = 180
+    private val receiptImageEffectDiffusion = true
 
     private data class PrintDocument(
         val commandBuilder: PrinterBuilder,
@@ -230,9 +232,12 @@ class StarXpandPrinterHandler(private val context: Context) : MethodChannel.Meth
     }
 
     private fun createReceiptImageParameter(bitmap: Bitmap): ImageParameter {
+        // StarXpand binarizes the rendered receipt here. Keeping diffusion on preserves
+        // fine antialiasing; a higher threshold darkens gray receipt text without
+        // changing the 576-dot bitmap rendering or the text-command print path.
         return ImageParameter(bitmap, printableRasterWidthPx)
-            .setEffectDiffusion(true)
-            .setThreshold(127)
+            .setEffectDiffusion(receiptImageEffectDiffusion)
+            .setThreshold(receiptImageThreshold)
     }
 
     private fun buildTextRasterReceipt(text: String): PrinterBuilder {
@@ -275,6 +280,7 @@ class StarXpandPrinterHandler(private val context: Context) : MethodChannel.Meth
         payload: Map<*, *>?,
         result: MethodChannel.Result,
         logLabel: String,
+        requestId: String = "no-request",
         documentFactory: () -> PrintDocument
     ) {
         val interfaceType = parseInterfaceType(interfaceTypeStr)
@@ -283,17 +289,23 @@ class StarXpandPrinterHandler(private val context: Context) : MethodChannel.Meth
         coroutineScope.launch(Dispatchers.IO) {
             var printer: StarPrinter? = null
             try {
+                Log.d("StarXpand", "[$requestId] print executor entered label=$logLabel identifier=$identifier")
                 val settings = StarConnectionSettings(interfaceType, identifier)
                 printer = StarPrinter(settings, context)
                 printer.openAsync().await()
 
                 val document = documentFactory()
                 val graphicsOnly = isGraphicsOnlyPrinter(printer, identifier, modelHint)
+                Log.d(
+                    "StarXpand",
+                    "[$requestId] printer model hint='$modelHint' graphicsOnly=$graphicsOnly identifier=$identifier"
+                )
                 val printerBuilder = if (graphicsOnly) {
-                    Log.d("StarXpand", "Using raster image print path for graphics-only Star printer: $identifier")
+                    Log.d("StarXpand", "[$requestId] selected print path=image-raster-fallback identifier=$identifier")
                     payload?.let { getReceiptImageBitmap(it) }?.let { buildImageReceipt(it) }
                         ?: buildTextRasterReceipt(document.rasterText)
                 } else {
+                    Log.d("StarXpand", "[$requestId] selected print path=native-text identifier=$identifier")
                     document.commandBuilder
                 }
 
@@ -304,13 +316,15 @@ class StarXpandPrinterHandler(private val context: Context) : MethodChannel.Meth
                         .addPrinter(printerBuilder)
                 )
 
+                Log.d("StarXpand", "[$requestId] actual StarXpand print call starting identifier=$identifier")
                 printer.printAsync(builder.getCommands()).await()
+                Log.d("StarXpand", "[$requestId] print completed identifier=$identifier")
 
                 withContext(Dispatchers.Main) {
                     result.success(true)
                 }
             } catch (e: Exception) {
-                Log.e("StarXpand", "$logLabel error: ${e.message}", e)
+                Log.e("StarXpand", "[$requestId] $logLabel error: ${e.message}", e)
                 withContext(Dispatchers.Main) {
                     result.error("PRINT_ERROR", e.message, null)
                 }
@@ -318,7 +332,7 @@ class StarXpandPrinterHandler(private val context: Context) : MethodChannel.Meth
                 try {
                     printer?.closeAsync()?.await()
                 } catch (e: Exception) {
-                    Log.d("StarXpand", "Printer close failed after $logLabel: ${e.message}")
+                    Log.d("StarXpand", "[$requestId] Printer close failed after $logLabel: ${e.message}")
                 }
             }
         }
@@ -347,6 +361,7 @@ class StarXpandPrinterHandler(private val context: Context) : MethodChannel.Meth
         val interfaceTypeStr = call.argument<String>("interfaceType") ?: return result.error("INVALID_ARGUMENT", "interfaceType required", null)
         val identifier = call.argument<String>("identifier") ?: return result.error("INVALID_ARGUMENT", "identifier required", null)
         val imageBase64 = call.argument<String>("imageBase64") ?: return result.error("INVALID_ARGUMENT", "imageBase64 required", null)
+        val requestId = call.argument<String>("requestId") ?: "no-request"
 
         val interfaceType = when (interfaceTypeStr) {
             "Lan" -> InterfaceType.Lan
@@ -356,14 +371,17 @@ class StarXpandPrinterHandler(private val context: Context) : MethodChannel.Meth
         }
 
         coroutineScope.launch(Dispatchers.IO) {
+            var printer: StarPrinter? = null
             try {
+                Log.d("StarXpand", "[$requestId] print executor entered label=Print image identifier=$identifier")
                 val imageBytes = Base64.decode(imageBase64, Base64.DEFAULT)
                 saveFlutterReceiptPng(imageBytes)
 
                 val settings = StarConnectionSettings(interfaceType, identifier)
-                val printer = StarPrinter(settings, context)
+                printer = StarPrinter(settings, context)
 
                 printer.openAsync().await()
+                Log.d("StarXpand", "[$requestId] selected print path=direct-image identifier=$identifier")
 
                 val builder = StarXpandCommandBuilder()
 
@@ -384,16 +402,23 @@ class StarXpandPrinterHandler(private val context: Context) : MethodChannel.Meth
 
                 val commands = builder.getCommands()
 
+                Log.d("StarXpand", "[$requestId] actual StarXpand print call starting identifier=$identifier")
                 printer.printAsync(commands).await()
-                printer.closeAsync().await()
+                Log.d("StarXpand", "[$requestId] print completed identifier=$identifier")
 
                 withContext(Dispatchers.Main) {
                     result.success(true)
                 }
             } catch (e: Exception) {
-                Log.e("StarXpand", "Print image error: ${e.message}", e)
+                Log.e("StarXpand", "[$requestId] Print image error: ${e.message}", e)
                 withContext(Dispatchers.Main) {
                     result.error("PRINT_ERROR", e.message, null)
+                }
+            } finally {
+                try {
+                    printer?.closeAsync()?.await()
+                } catch (e: Exception) {
+                    Log.d("StarXpand", "[$requestId] Printer close failed after Print image: ${e.message}")
                 }
             }
         }
@@ -598,6 +623,7 @@ class StarXpandPrinterHandler(private val context: Context) : MethodChannel.Meth
         val interfaceTypeStr = call.argument<String>("interfaceType") ?: return result.error("INVALID_ARGUMENT", "interfaceType required", null)
         val identifier = call.argument<String>("identifier") ?: return result.error("INVALID_ARGUMENT", "identifier required", null)
         val orderData = call.argument<Map<*, *>>("orderData") ?: return result.error("INVALID_ARGUMENT", "orderData required", null)
+        val requestId = call.argument<String>("requestId") ?: "no-request"
 
         printDocument(
             interfaceTypeStr,
@@ -605,7 +631,8 @@ class StarXpandPrinterHandler(private val context: Context) : MethodChannel.Meth
             getPrinterModelHint(call, orderData),
             orderData,
             result,
-            "Print kitchen order"
+            "Print kitchen order",
+            requestId
         ) {
             val orderType = (orderData["orderType"] as? String) ?: "PICKUP"
             val isDineIn = orderType.uppercase() == "DINE-IN" || orderType.uppercase() == "DINEIN"
@@ -819,8 +846,6 @@ class StarXpandPrinterHandler(private val context: Context) : MethodChannel.Meth
 
         val printerBuilder = PrinterBuilder()
 
-        printerBuilder.actionFeedLine(2)
-
         printerBuilder
             .styleMagnification(MagnificationParameter(2, 2))
             .styleBold(true)
@@ -828,21 +853,15 @@ class StarXpandPrinterHandler(private val context: Context) : MethodChannel.Meth
             .actionPrintText("$storeName\n")
             .actionFeed(0.5)
             .styleMagnification(MagnificationParameter(1, 1))
-            .styleBold(false)
+            .styleBold(true)
             .actionPrintText("$orderType\n")
             .actionFeed(0.5)
-
-        val customerLine = if (customerName.isNotEmpty() && orderNumber.isNotEmpty()) {
-            "$customerName - $orderNumber"
-        } else if (customerName.isNotEmpty()) {
-            customerName
-        } else {
-            "Guest"
-        }
-
-        printerBuilder
-            .styleAlignment(Alignment.Center)
-            .actionPrintText("$customerLine\n")
+            .styleMagnification(MagnificationParameter(2, 2))
+            .actionPrintText("Order #$orderNumber\n")
+            .styleMagnification(MagnificationParameter(1, 1))
+            .styleBold(false)
+            .styleAlignment(Alignment.Left)
+            .actionFeed(0.8)
 
         if (isReturningCustomer) {
             val orderLabel = if (customerOrderCount == 1) "Order" else "Orders"
@@ -852,35 +871,50 @@ class StarXpandPrinterHandler(private val context: Context) : MethodChannel.Meth
                 "Returning Customer"
             }
             printerBuilder
-                .actionFeed(0.3)
                 .styleBold(true)
                 .actionPrintText("$returningText\n")
                 .styleBold(false)
+                .actionFeed(0.3)
         }
 
+        if (customerName.isNotEmpty()) {
+            printerBuilder.actionPrintText("Customer : ", TextParameter().setWidth(24))
+                .actionPrintText("$customerName\n", TextParameter().setWidth(48, TextWidthParameter().setAlignment(TextAlignment.Right)))
+        }
         if (customerPhone.isNotEmpty()) {
-            printerBuilder
-                .actionFeed(0.3)
-                .styleAlignment(Alignment.Center)
-                .actionPrintText("Phone: $customerPhone\n")
-                .styleAlignment(Alignment.Left)
+            printerBuilder.actionPrintText("Phone : ", TextParameter().setWidth(24))
+                .actionPrintText("$customerPhone\n", TextParameter().setWidth(48, TextWidthParameter().setAlignment(TextAlignment.Right)))
+        }
+        if (placedAt.isNotEmpty()) {
+            printerBuilder.actionPrintText("Placed at : ", TextParameter().setWidth(24))
+                .actionPrintText("$placedAt\n", TextParameter().setWidth(48, TextWidthParameter().setAlignment(TextAlignment.Right)))
+        }
+        if (dueAt.isNotEmpty()) {
+            printerBuilder.actionPrintText("Due at : ", TextParameter().setWidth(24))
+                .actionPrintText("$dueAt\n", TextParameter().setWidth(48, TextWidthParameter().setAlignment(TextAlignment.Right)))
         }
 
         printerBuilder
-            .actionFeed(0.5)
+            .actionFeed(0.8)
             .actionPrintRuledLine(RuledLineParameter(72.0).setThickness(0.1))
-            .actionFeed(0.5)
+            .actionFeed(0.8)
 
         if (note.isNotEmpty()) {
             printerBuilder
                 .styleBold(true)
-                .actionPrintText("Order Note: \n")
+                .actionPrintText("Kitchen Note\n")
                 .styleBold(false)
                 .actionPrintText("$note\n")
-                .actionFeed(0.5)
+                .actionFeed(0.8)
                 .actionPrintRuledLine(RuledLineParameter(72.0).setThickness(0.1))
-                .actionFeed(0.5)
+                .actionFeed(0.8)
         }
+
+        printerBuilder
+            .styleBold(true)
+            .actionPrintText("Items\n")
+            .styleBold(false)
+            .actionFeed(0.5)
 
         for (item in items) {
             val itemMap = item as? Map<*, *> ?: continue
@@ -891,38 +925,29 @@ class StarXpandPrinterHandler(private val context: Context) : MethodChannel.Meth
 
             printerBuilder
                 .styleBold(true)
-                .actionPrintText("$name\n")
+                .actionPrintText("$quantity \u00d7 $name\n")
                 .styleBold(false)
-                .actionPrintText(
-                    quantity.toString() + "\n",
-                    TextParameter().setWidth(72, TextWidthParameter().setAlignment(TextAlignment.Right))
-                )
 
             for (modifier in modifiers) {
                 val modMap = modifier as? Map<*, *> ?: continue
-                val modName = (modMap["name"] as? String) ?: ""
-                printerBuilder.actionPrintText("• $modName\n")
+                val modName = formatModifierForKitchen(modMap)
+                if (modName.isNotEmpty()) {
+                    printerBuilder.actionPrintText("  \u2022 $modName\n")
+                }
             }
 
             if (itemNote.isNotEmpty()) {
-                printerBuilder.actionPrintText("Order Note: $itemNote\n")
+                printerBuilder.actionPrintText("  Item Note: $itemNote\n")
             }
 
-            printerBuilder.actionFeedLine(1)
+            printerBuilder
+                .actionFeed(0.5)
+                .actionPrintRuledLine(RuledLineParameter(72.0).setThickness(0.1))
+                .actionFeed(0.5)
         }
 
         printerBuilder
-            .actionPrintRuledLine(RuledLineParameter(72.0).setThickness(0.1))
-            .actionFeed(0.8)
-
-        if (placedAt.isNotEmpty()) {
-            printerBuilder.actionPrintText("Placed at: $placedAt\n")
-        }
-        if (dueAt.isNotEmpty()) {
-            printerBuilder.actionPrintText("Due at: $dueAt\n")
-        }
-
-        printerBuilder
+            .styleAlignment(Alignment.Left)
             .actionFeed(1.0)
             .actionCut(CutType.Partial)
 
@@ -1625,6 +1650,19 @@ class StarXpandPrinterHandler(private val context: Context) : MethodChannel.Meth
         return safeLeft + " ".repeat(spaces) + safeRight
     }
 
+    private fun receiptCenter(text: String, width: Int = 42): String {
+        if (text.length >= width) return text
+        val leftPadding = (width - text.length) / 2
+        return " ".repeat(leftPadding) + text
+    }
+
+    private fun formatModifierForKitchen(modifier: Map<*, *>): String {
+        val group = (modifier["group"] as? String)?.trim().orEmpty()
+        val name = (modifier["name"] as? String)?.trim().orEmpty()
+        if (name.isEmpty()) return ""
+        return if (group.isNotEmpty() && !name.contains(":")) "$group: $name" else name
+    }
+
     private fun appendWrapped(builder: StringBuilder, text: String, indent: String = "", width: Int = 42) {
         if (text.isBlank()) return
         var current = text.trim()
@@ -1701,34 +1739,32 @@ class StarXpandPrinterHandler(private val context: Context) : MethodChannel.Meth
         val orderType = (orderData["orderType"] as? String) ?: "PICKUP"
         val placedAt = (orderData["placedAt"] as? String) ?: orderDate
         val dueAt = (orderData["dueAt"] as? String) ?: ""
-        val customerLine = when {
-            customerName.isNotEmpty() && orderNumber.isNotEmpty() -> "$customerName - $orderNumber"
-            customerName.isNotEmpty() -> customerName
-            else -> "Guest"
-        }
 
         return buildString {
-            append("**").append(storeName).append("**\n")
-            append(orderType).append('\n')
-            append(customerLine).append('\n')
+            append("**").append(receiptCenter(storeName)).append("**\n")
+            append("**").append(receiptCenter(orderType)).append("**\n")
+            append("**").append(receiptCenter("Order #$orderNumber")).append("**\n")
+            append('\n')
             if (isReturningCustomer) {
                 val orderLabel = if (customerOrderCount == 1) "Order" else "Orders"
                 append("**Returning Customer")
                 if (customerOrderCount > 0) append(" [$customerOrderCount $orderLabel]")
                 append("**\n")
             }
-            if (customerPhone.isNotEmpty()) append("Phone: ").append(customerPhone).append('\n')
-            append(receiptDivider()).append('\n')
+            if (customerName.isNotEmpty()) append(receiptColumns("Customer :", customerName)).append('\n')
+            if (customerPhone.isNotEmpty()) append(receiptColumns("Phone :", customerPhone)).append('\n')
+            if (placedAt.isNotEmpty()) append(receiptColumns("Placed at :", placedAt)).append('\n')
+            if (dueAt.isNotEmpty()) append(receiptColumns("Due at :", dueAt)).append('\n')
+            append('\n')
             if (note.isNotEmpty()) {
-                append("**Order Note:**\n")
+                append("**Kitchen Note**\n")
                 appendWrapped(this, note)
+                append('\n')
                 append(receiptDivider()).append('\n')
             }
+            append("**Items**\n")
             appendKitchenItemsText(this, items)
             append(receiptDivider()).append('\n')
-            if (placedAt.isNotEmpty()) append("Placed at: ").append(placedAt).append('\n')
-            if (dueAt.isNotEmpty()) append("Due at: ").append(dueAt).append('\n')
-            append('\n')
         }
     }
 
@@ -1750,14 +1786,15 @@ class StarXpandPrinterHandler(private val context: Context) : MethodChannel.Meth
             val itemMap = item as? Map<*, *> ?: continue
             val quantity = (itemMap["quantity"] as? Number)?.toInt() ?: 1
             val name = (itemMap["name"] as? String) ?: ""
-            builder.append("**").append(quantity).append(" x ").append(name).append("**\n")
+            builder.append("**").append(quantity).append(" \u00d7 ").append(name).append("**\n")
             val modifiers = (itemMap["modifiers"] as? List<*>) ?: emptyList<Any>()
             for (modifier in modifiers) {
                 val modMap = modifier as? Map<*, *> ?: continue
-                appendWrapped(builder, "- ${modMap["name"] as? String ?: ""}", "  ")
+                val modName = formatModifierForKitchen(modMap)
+                if (modName.isNotEmpty()) appendWrapped(builder, "\u2022 $modName", "  ")
             }
             val itemNote = (itemMap["itemNote"] as? String) ?: ""
-            if (itemNote.isNotEmpty()) appendWrapped(builder, "Note: $itemNote", "  ")
+            if (itemNote.isNotEmpty()) appendWrapped(builder, "Item Note: $itemNote", "  ")
             builder.append('\n')
         }
     }

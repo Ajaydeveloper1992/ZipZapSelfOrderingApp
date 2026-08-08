@@ -8,7 +8,7 @@ class ReceiptCaptureHelper {
   static const double width4Inch = 384;
   static const double width4InchMm = 101.6;
   static const double capturePixelRatio4Inch = 2.12;
-  static const double width80mm = 560;
+  static const double width80mm = 576;
   static const double width58mm = 420;
 
   static Future<Uint8List> captureAsPng(

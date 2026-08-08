@@ -137,8 +137,12 @@ class PrinterService {
     required String imageBase64,
     String? targetType, // optional: 'kitchen' | 'customer' | 'quote'
     double? paperWidthMm,
+    String? requestId,
   }) async {
     try {
+      debugPrint(
+        '[$requestId] PrinterService.printImage requested target=${targetType ?? 'unknown'} printer=$identifier path=image',
+      );
       final result = await _channel.invokeMethod<bool>('printImage', {
         'interfaceType': interfaceType,
         'identifier': identifier,
@@ -146,10 +150,14 @@ class PrinterService {
         ...await _printerMetadataArgs(identifier),
         if (targetType != null) 'type': targetType,
         if (paperWidthMm != null) 'paperWidthMm': paperWidthMm,
+        if (requestId != null) 'requestId': requestId,
       });
+      debugPrint(
+        '[$requestId] PrinterService.printImage completed target=${targetType ?? 'unknown'} printer=$identifier success=${result ?? false}',
+      );
       return result ?? false;
     } catch (e) {
-      debugPrint('Error printing image: $e');
+      debugPrint('[$requestId] Error printing image: $e');
       return false;
     }
   }
@@ -159,30 +167,45 @@ class PrinterService {
     required String interfaceType,
     required String identifier,
     required Map<String, dynamic> orderData,
+    String? requestId,
   }) async {
     try {
+      debugPrint(
+        '[$requestId] PrinterService.printKitchenOrder requested printer=$identifier',
+      );
       // If a rendered receipt image is provided, prefer printing the image
       final imageBase64 = orderData['receiptImage'] as String?;
       if (imageBase64 != null && imageBase64.isNotEmpty) {
         final paperWidthMm = (orderData['paperWidthMm'] as num?)?.toDouble();
+        debugPrint(
+          '[$requestId] PrinterService.printKitchenOrder selected path=image printer=$identifier',
+        );
         return await printImage(
           interfaceType: interfaceType,
           identifier: identifier,
           imageBase64: imageBase64,
           targetType: 'kitchen',
           paperWidthMm: paperWidthMm,
+          requestId: requestId,
         );
       }
 
+      debugPrint(
+        '[$requestId] PrinterService.printKitchenOrder selected path=native-text printer=$identifier',
+      );
       final result = await _channel.invokeMethod<bool>('printKitchenOrder', {
         'interfaceType': interfaceType,
         'identifier': identifier,
         ...await _printerMetadataArgs(identifier),
+        if (requestId != null) 'requestId': requestId,
         'orderData': orderData,
       });
+      debugPrint(
+        '[$requestId] PrinterService.printKitchenOrder completed printer=$identifier success=${result ?? false}',
+      );
       return result ?? false;
     } catch (e) {
-      debugPrint('Error printing kitchen order: $e');
+      debugPrint('[$requestId] Error printing kitchen order: $e');
       return false;
     }
   }

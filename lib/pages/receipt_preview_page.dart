@@ -65,6 +65,7 @@ class _ReceiptPreviewPageState extends State<ReceiptPreviewPage>
           children: [
             _buildReceiptTab(
               repaintKey: _customerReceiptKey,
+              width: ReceiptCaptureHelper.width4Inch,
               receipt: CustomerReceipt(
                 model: _customerReceiptModel,
                 width: ReceiptCaptureHelper.width4Inch,
@@ -72,9 +73,10 @@ class _ReceiptPreviewPageState extends State<ReceiptPreviewPage>
             ),
             _buildReceiptTab(
               repaintKey: _kitchenReceiptKey,
+              width: ReceiptCaptureHelper.width80mm,
               receipt: KitchenReceipt(
                 model: _kitchenReceiptModel,
-                width: ReceiptCaptureHelper.width4Inch,
+                width: ReceiptCaptureHelper.width80mm,
               ),
             ),
           ],
@@ -133,28 +135,31 @@ class _ReceiptPreviewPageState extends State<ReceiptPreviewPage>
 
   Widget _buildReceiptTab({
     required GlobalKey repaintKey,
+    required double width,
     required Widget receipt,
   }) {
     return LayoutBuilder(
-      builder: (context, constraints) {
+      builder: (context, _) {
         return SingleChildScrollView(
           padding: const EdgeInsets.fromLTRB(16, 18, 16, 24),
-          child: Align(
-            alignment: Alignment.topCenter,
-            child: Container(
-              width: ReceiptCaptureHelper.width4Inch,
-              constraints: BoxConstraints(maxWidth: constraints.maxWidth - 32),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withAlpha(18),
-                    blurRadius: 14,
-                    offset: const Offset(0, 6),
-                  ),
-                ],
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Align(
+              alignment: Alignment.topCenter,
+              child: Container(
+                width: width,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withAlpha(18),
+                      blurRadius: 14,
+                      offset: const Offset(0, 6),
+                    ),
+                  ],
+                ),
+                child: RepaintBoundary(key: repaintKey, child: receipt),
               ),
-              child: RepaintBoundary(key: repaintKey, child: receipt),
             ),
           ),
         );

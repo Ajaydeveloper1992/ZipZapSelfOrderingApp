@@ -6,7 +6,7 @@ class KitchenReceipt extends StatelessWidget {
   final ReceiptModel model;
   final double width;
 
-  const KitchenReceipt({super.key, required this.model, this.width = 560});
+  const KitchenReceipt({super.key, required this.model, this.width = 576});
 
   @override
   Widget build(BuildContext context) {
@@ -16,29 +16,28 @@ class KitchenReceipt extends StatelessWidget {
       child: Material(
         color: Colors.white,
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 18),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               _buildHeader(context),
-              const SizedBox(height: 10),
+              const SizedBox(height: 14),
               _buildOrderMeta(context),
               if (model.kitchenNote != null &&
                   model.kitchenNote!.isNotEmpty) ...[
-                const SizedBox(height: 12),
+                const SizedBox(height: 18),
                 ReceiptSection(
                   heading: 'Kitchen Note',
+                  padding: EdgeInsets.zero,
                   child: ReceiptNoteBox(model.kitchenNote!),
                 ),
               ],
-              const SizedBox(height: 12),
+              const SizedBox(height: 24),
               const ReceiptDivider(),
-              const SizedBox(height: 12),
+              const SizedBox(height: 14),
               _buildItems(context),
-              const SizedBox(height: 12),
+              const SizedBox(height: 8),
               const ReceiptDivider(),
-              const SizedBox(height: 12),
-              _buildFooter(context),
             ],
           ),
         ),
@@ -55,7 +54,7 @@ class KitchenReceipt extends StatelessWidget {
           textAlign: TextAlign.center,
           style: Theme.of(context).textTheme.headlineSmall?.copyWith(
             fontWeight: FontWeight.w900,
-            letterSpacing: 0.3,
+            color: Colors.black,
           ),
         ),
         if (model.orderType != null) ...[
@@ -65,7 +64,7 @@ class KitchenReceipt extends StatelessWidget {
             textAlign: TextAlign.center,
             style: Theme.of(context).textTheme.titleMedium?.copyWith(
               fontWeight: FontWeight.w700,
-              color: Colors.black87,
+              color: Colors.black,
             ),
           ),
         ],
@@ -73,9 +72,10 @@ class KitchenReceipt extends StatelessWidget {
         Text(
           'Order #${model.orderNumber}',
           textAlign: TextAlign.center,
-          style: Theme.of(
-            context,
-          ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
+          style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+            fontWeight: FontWeight.w900,
+            color: Colors.black,
+          ),
         ),
       ],
     );
@@ -98,20 +98,19 @@ class KitchenReceipt extends StatelessWidget {
   Widget _buildItems(BuildContext context) {
     return ReceiptSection(
       heading: 'Items',
+      padding: EdgeInsets.zero,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: model.items
-            .map(
-              (item) => Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  _buildItem(context, item),
-                  const SizedBox(height: 10),
-                  const ReceiptDivider(),
-                ],
-              ),
-            )
-            .toList(),
+        children: [
+          for (var i = 0; i < model.items.length; i++) ...[
+            _buildItem(context, model.items[i]),
+            if (i != model.items.length - 1) ...[
+              const SizedBox(height: 14),
+              const ReceiptDivider(),
+              const SizedBox(height: 12),
+            ],
+          ],
+        ],
       ),
     );
   }
@@ -121,21 +120,24 @@ class KitchenReceipt extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Text(
-          '${item.quantity} × ${item.name}',
-          style: Theme.of(
-            context,
-          ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+          '${item.quantity} \u00d7 ${item.name}',
+          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+            fontWeight: FontWeight.w800,
+            color: Colors.black,
+          ),
         ),
         if (item.variants.isNotEmpty || item.addons.isNotEmpty) ...[
-          const SizedBox(height: 8),
-          ReceiptItemDetails(details: [...item.variants, ...item.addons]),
+          const SizedBox(height: 12),
+          _buildItemDetails(context, [...item.variants, ...item.addons]),
         ],
         if (item.notes != null && item.notes!.isNotEmpty) ...[
-          const SizedBox(height: 8),
+          const SizedBox(height: 12),
           ReceiptDecoratedCard(
             child: Text(
               item.notes!,
-              style: Theme.of(context).textTheme.bodySmall,
+              style: Theme.of(
+                context,
+              ).textTheme.bodyMedium?.copyWith(color: Colors.black87),
             ),
           ),
         ],
@@ -143,47 +145,52 @@ class KitchenReceipt extends StatelessWidget {
     );
   }
 
-  Widget _buildFooter(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.center,
-      children: [
-        Text(
-          'Kitchen Copy',
-          style: Theme.of(
-            context,
-          ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          'Printed: ${_formatDate(DateTime.now())}',
-          style: Theme.of(
-            context,
-          ).textTheme.bodySmall?.copyWith(color: Colors.black54),
-        ),
-      ],
+  Widget _buildItemDetails(BuildContext context, List<String> details) {
+    if (details.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(left: 2),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: details.map((detail) {
+          return Padding(
+            padding: const EdgeInsets.symmetric(vertical: 2),
+            child: Text(
+              '\u2022 $detail',
+              style: Theme.of(
+                context,
+              ).textTheme.bodyMedium?.copyWith(color: Colors.black87),
+            ),
+          );
+        }).toList(),
+      ),
     );
   }
 
   Widget _infoRow(String label, String value, BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 2),
+      padding: const EdgeInsets.symmetric(vertical: 3),
       child: Row(
         children: [
           Expanded(
-            flex: 3,
+            flex: 2,
             child: Text(
               '$label :',
               style: Theme.of(
                 context,
-              ).textTheme.bodySmall?.copyWith(color: Colors.black54),
+              ).textTheme.bodySmall?.copyWith(color: Colors.black87),
             ),
           ),
           Expanded(
-            flex: 4,
+            flex: 3,
             child: Text(
               value,
               textAlign: TextAlign.right,
-              style: Theme.of(context).textTheme.bodyMedium,
+              style: Theme.of(
+                context,
+              ).textTheme.bodyMedium?.copyWith(color: Colors.black),
             ),
           ),
         ],

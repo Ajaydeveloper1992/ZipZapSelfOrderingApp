@@ -35,6 +35,7 @@ class _OrderDetailsDrawerState extends State<OrderDetailsDrawer> {
   bool _isPrintingKitchen = false;
   final bool _isSendingContact = false;
   bool _isUpdatingPickupTime = false;
+  int _kitchenPrintSequence = 0;
   final OrdersService _ordersService = OrdersService();
   final CustomersService _customersService = CustomersService();
   final DataProvider _dataProvider = DataProvider();
@@ -384,6 +385,8 @@ class _OrderDetailsDrawerState extends State<OrderDetailsDrawer> {
   }
 
   Future<void> _handlePrintKitchenReceipt() async {
+    final requestId = _nextKitchenPrintRequestId('takeout');
+    debugPrint('[$requestId] kitchen print requested from takeout drawer');
     try {
       setState(() {
         _isPrintingKitchen = true;
@@ -400,10 +403,16 @@ class _OrderDetailsDrawerState extends State<OrderDetailsDrawer> {
 
       // Get kitchen printers (kitchen group) only
       final printers = await PrinterService.getSavedPrinters();
+      final seenPrinterKeys = <String>{};
       final kitchenPrinters = printers
           .where((p) => p.group == PrinterGroup.kitchen)
           .where((p) => p.status != PrinterStatus.error)
+          .where((p) => seenPrinterKeys.add('${p.type}:${p.identifier}'))
           .toList();
+
+      debugPrint(
+        '[$requestId] kitchen printers selected count=${kitchenPrinters.length}',
+      );
 
       if (kitchenPrinters.isEmpty) {
         if (mounted) {
@@ -430,10 +439,14 @@ class _OrderDetailsDrawerState extends State<OrderDetailsDrawer> {
         );
         try {
           final interfaceType = _printerTypeToString(printer.type);
+          debugPrint(
+            '[$requestId] kitchen print submitting printer=${printer.name} model=${printer.modelName ?? 'unknown'} identifier=${printer.identifier}',
+          );
           final success = await PrinterService.printKitchenOrder(
             interfaceType: interfaceType,
             identifier: printer.identifier,
             orderData: orderData,
+            requestId: requestId,
           );
           if (!success) {
             allSuccess = false;
@@ -543,22 +556,22 @@ class _OrderDetailsDrawerState extends State<OrderDetailsDrawer> {
     // Format pickup time if available
     // Use createdAt if available, otherwise use date
     final placedAtDate = widget.order.createdAt ?? widget.order.date;
-    String placedAt = DateFormat('MMMM dd, h:mm a').format(placedAtDate);
+    String placedAt = DateFormat('yyyy-MM-dd HH:mm').format(placedAtDate);
     String dueAt = '';
     // delayTime is now DateTime?, check if it's set
     if (widget.order.pickupInfo?.delayTime != null) {
       dueAt = DateFormat(
-        'MMMM dd, h:mm a',
+        'yyyy-MM-dd HH:mm',
       ).format(widget.order.pickupInfo!.delayTime!);
     } else if (widget.order.pickupInfo?.pickupTime != null) {
       // Use pickupTime if delayTime is not set
       dueAt = DateFormat(
-        'MMMM dd, h:mm a',
+        'yyyy-MM-dd HH:mm',
       ).format(widget.order.pickupInfo!.pickupTime!);
     } else {
       // No pickup time (ASAP): add 25 minutes to order date
       final dueDateTime = widget.order.date.add(const Duration(minutes: 25));
-      dueAt = DateFormat('MMMM dd, h:mm a').format(dueDateTime);
+      dueAt = DateFormat('yyyy-MM-dd HH:mm').format(dueDateTime);
     }
 
     return {
@@ -598,6 +611,11 @@ class _OrderDetailsDrawerState extends State<OrderDetailsDrawer> {
       'note': widget.order.note ?? widget.order.comment ?? '',
       'splitInfo': null,
     };
+  }
+
+  String _nextKitchenPrintRequestId(String source) {
+    _kitchenPrintSequence += 1;
+    return 'kitchen-$source-${DateTime.now().microsecondsSinceEpoch}-$_kitchenPrintSequence';
   }
 
   List<OrderItem> _filterOrderItemsForPrinter(

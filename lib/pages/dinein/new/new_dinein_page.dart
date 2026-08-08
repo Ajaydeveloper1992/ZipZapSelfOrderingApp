@@ -61,6 +61,7 @@ class _NewDineInPageState extends State<NewDineInPage> {
   bool _isPrintingCustomer = false;
   bool _isPrintingQuote = false;
   bool _isCreatingOrder = false;
+  int _kitchenPrintSequence = 0;
   List<Modifier> _modifiers = [];
   String _orderType = ApiConstants.uiOrderTypeDineIn; // Default to dine-in
   bool _hasShownCustomerModal = false;
@@ -1125,16 +1126,24 @@ class _NewDineInPageState extends State<NewDineInPage> {
       return;
     }
 
-    if (_isCreatingOrder) return;
+    if (_isCreatingOrder) {
+      debugPrint(
+        'Kitchen print requested while order creation is already running; ignoring duplicate tap.',
+      );
+      return;
+    }
 
-    // Refresh customer data before printing to ensure returning badge is accurate
-    await _refreshSelectedCustomerForPrint();
-
+    _isCreatingOrder = true;
+    final requestId = _nextKitchenPrintRequestId('send');
+    debugPrint('[$requestId] kitchen print requested from Send to Kitchen');
     setState(() {
       _isCreatingOrder = true;
     });
 
     try {
+      // Refresh customer data before printing to ensure returning badge is accurate
+      await _refreshSelectedCustomerForPrint();
+
       // Resolve store ID early (used for create AND update flows)
       final dataProvider = DataProvider();
       final profile = _authService.getProfile();
@@ -1334,7 +1343,7 @@ class _NewDineInPageState extends State<NewDineInPage> {
         }
 
         // Print pending items to kitchen before clearing cart
-        await _handlePrintKitchenPending();
+        await _handlePrintKitchenPending(requestId: requestId);
 
         // For NEW dine-in orders, clear cart and redirect to dine-in page
         const redirectRoute = '/dinein';
@@ -1520,6 +1529,7 @@ class _NewDineInPageState extends State<NewDineInPage> {
         unawaited(() async {
           await _handlePrintKitchenPending(
             pendingItemsOverride: pendingItemsToPrint,
+            requestId: requestId,
           );
           await _dataProvider.loadTakeoutOrders(forceRefresh: true);
         }());
@@ -1544,10 +1554,20 @@ class _NewDineInPageState extends State<NewDineInPage> {
     }
   }
 
+  String _nextKitchenPrintRequestId(String source) {
+    _kitchenPrintSequence += 1;
+    return 'kitchen-$source-${DateTime.now().microsecondsSinceEpoch}-$_kitchenPrintSequence';
+  }
+
   Future<void> _handlePrintKitchen() async {
     if (_cartItems.isEmpty) {
       return;
     }
+
+    final requestId = _nextKitchenPrintRequestId('manual');
+    debugPrint(
+      '[$requestId] kitchen print requested from kitchen print button',
+    );
 
     // Refresh customer data before printing to ensure returning badge is accurate
     await _refreshSelectedCustomerForPrint();
@@ -1568,9 +1588,11 @@ class _NewDineInPageState extends State<NewDineInPage> {
 
       // Get kitchen printers (kitchen group) only
       final printers = await PrinterService.getSavedPrinters();
+      final seenPrinterKeys = <String>{};
       final kitchenPrinters = printers
           .where((p) => p.group == PrinterGroup.kitchen)
           .where((p) => p.status != PrinterStatus.error)
+          .where((p) => seenPrinterKeys.add('${p.type}:${p.identifier}'))
           .toList();
 
       if (kitchenPrinters.isEmpty) {
@@ -1607,6 +1629,7 @@ class _NewDineInPageState extends State<NewDineInPage> {
             interfaceType: interfaceType,
             identifier: printer.identifier,
             orderData: orderData,
+            requestId: requestId,
           );
           if (success) {
             for (final item in filteredItems) {
@@ -1640,6 +1663,7 @@ class _NewDineInPageState extends State<NewDineInPage> {
                 interfaceType: interfaceType,
                 identifier: printer.identifier,
                 orderData: orderData,
+                requestId: requestId,
               );
               if (success) {
                 for (final item in unmatchedItems) {
@@ -1714,6 +1738,7 @@ class _NewDineInPageState extends State<NewDineInPage> {
 
   Future<void> _handlePrintKitchenPending({
     List<CartItem>? pendingItemsOverride,
+    String? requestId,
   }) async {
     // Capture state upfront before any async gap -- when called fire-and-forget
     // from _handleSendToKitchen, these fields may be cleared before async resumes.
@@ -1742,6 +1767,12 @@ class _NewDineInPageState extends State<NewDineInPage> {
       return;
     }
 
+    final effectiveRequestId =
+        requestId ?? _nextKitchenPrintRequestId('pending');
+    debugPrint(
+      '[$effectiveRequestId] kitchen print executor entered items=${pendingItems.length}',
+    );
+
     // Now try to print. We DO NOT optimistically mark items as inKitchen
     // before the print succeeds -- if the print silently fails (no label
     // match, native error, etc.) the user must be able to retry.
@@ -1755,10 +1786,16 @@ class _NewDineInPageState extends State<NewDineInPage> {
 
       // Get kitchen printers (kitchen group) only
       final printers = await PrinterService.getSavedPrinters();
+      final seenPrinterKeys = <String>{};
       final kitchenPrinters = printers
           .where((p) => p.group == PrinterGroup.kitchen)
           .where((p) => p.status != PrinterStatus.error)
+          .where((p) => seenPrinterKeys.add('${p.type}:${p.identifier}'))
           .toList();
+
+      debugPrint(
+        '[$effectiveRequestId] kitchen printers selected count=${kitchenPrinters.length}',
+      );
 
       if (kitchenPrinters.isEmpty) {
         if (mounted) {
@@ -1794,10 +1831,14 @@ class _NewDineInPageState extends State<NewDineInPage> {
         );
         try {
           final interfaceType = _printerTypeToString(printer.type);
+          debugPrint(
+            '[$effectiveRequestId] kitchen print submitting printer=${printer.name} model=${printer.modelName ?? 'unknown'} identifier=${printer.identifier}',
+          );
           final success = await PrinterService.printKitchenOrder(
             interfaceType: interfaceType,
             identifier: printer.identifier,
             orderData: orderData,
+            requestId: effectiveRequestId,
           );
           if (success) {
             for (final item in filteredItems) {
@@ -1835,10 +1876,14 @@ class _NewDineInPageState extends State<NewDineInPage> {
             anyPrinted = true;
             try {
               final interfaceType = _printerTypeToString(printer.type);
+              debugPrint(
+                '[$effectiveRequestId] kitchen fallback submitting printer=${printer.name} model=${printer.modelName ?? 'unknown'} identifier=${printer.identifier}',
+              );
               final success = await PrinterService.printKitchenOrder(
                 interfaceType: interfaceType,
                 identifier: printer.identifier,
                 orderData: orderData,
+                requestId: effectiveRequestId,
               );
               if (success) {
                 for (final item in unmatchedItems) {
@@ -2456,9 +2501,9 @@ class _NewDineInPageState extends State<NewDineInPage> {
       'orderNumber': effectiveOrderNumber ?? 'NEW',
       'orderDate': orderDate,
       'orderType': _getOrderTypeLabel(_orderType),
-      'placedAt': DateFormat('MMMM dd, h:mm a').format(now),
+      'placedAt': DateFormat('yyyy-MM-dd HH:mm').format(now),
       'dueAt': DateFormat(
-        'MMMM dd, h:mm a',
+        'yyyy-MM-dd HH:mm',
       ).format(effectivePickupTime ?? now.add(const Duration(minutes: 25))),
       'customerName': effectiveCustomer?.fullName ?? '',
       'floorPlanName': _tableInfo?['floorPlanName'] as String? ?? '',
