@@ -38,6 +38,8 @@ class StarXpandPrinterHandler(private val context: Context) : MethodChannel.Meth
     private val PERMISSION_REQUEST_CODE = 1001
     private val printableAreaMm = 72.0
     private val printableRasterWidthPx = 576
+    private val receiptTextColumns = 36
+    private val receiptBorderMarker = "@@BORDER@@"
     private val receiptImageThreshold = 180
     private val receiptImageEffectDiffusion = true
 
@@ -245,6 +247,8 @@ class StarXpandPrinterHandler(private val context: Context) : MethodChannel.Meth
     }
 
     private fun renderReceiptTextBitmap(text: String): Bitmap {
+        val hasBorder = text.startsWith(receiptBorderMarker)
+        val receiptText = if (hasBorder) text.removePrefix(receiptBorderMarker).trimStart('\n') else text
         val normalPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.BLACK
             textSize = 24f
@@ -253,19 +257,41 @@ class StarXpandPrinterHandler(private val context: Context) : MethodChannel.Meth
         val boldPaint = Paint(normalPaint).apply {
             typeface = Typeface.create(Typeface.MONOSPACE, Typeface.BOLD)
         }
+        val italicPaint = Paint(normalPaint).apply {
+            typeface = Typeface.create(Typeface.MONOSPACE, Typeface.ITALIC)
+        }
         val lineHeight = (normalPaint.fontMetrics.descent - normalPaint.fontMetrics.ascent + 8).toInt()
-        val horizontalPadding = 16f
-        val verticalPadding = 18
-        val lines = text.trimEnd('\n').split('\n')
+        val horizontalPadding = if (hasBorder) 28f else 16f
+        val verticalPadding = if (hasBorder) 28 else 18
+        val lines = receiptText.trimEnd('\n').split('\n')
         val bitmapHeight = (lines.size * lineHeight + verticalPadding * 2).coerceAtLeast(lineHeight + verticalPadding * 2)
         val bitmap = Bitmap.createBitmap(printableRasterWidthPx, bitmapHeight, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)
         canvas.drawColor(Color.WHITE)
 
+        if (hasBorder) {
+            val borderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = Color.BLACK
+                style = Paint.Style.STROKE
+                strokeWidth = 2f
+            }
+            canvas.drawRect(4f, 4f, printableRasterWidthPx - 5f, bitmapHeight - 5f, borderPaint)
+        }
+
         var y = verticalPadding - normalPaint.fontMetrics.ascent
         for (line in lines) {
-            val paint = if (line.startsWith("**") && line.endsWith("**")) boldPaint else normalPaint
-            val printableLine = line.removePrefix("**").removeSuffix("**")
+            val isBold = line.startsWith("**") && line.endsWith("**")
+            val isItalic = line.startsWith("//") && line.endsWith("//")
+            val paint = when {
+                isBold -> boldPaint
+                isItalic -> italicPaint
+                else -> normalPaint
+            }
+            val printableLine = line
+                .removePrefix("**")
+                .removeSuffix("**")
+                .removePrefix("//")
+                .removeSuffix("//")
             canvas.drawText(printableLine, horizontalPadding, y, paint)
             y += lineHeight
         }
@@ -636,9 +662,14 @@ class StarXpandPrinterHandler(private val context: Context) : MethodChannel.Meth
         ) {
             val orderType = (orderData["orderType"] as? String) ?: "PICKUP"
             val isDineIn = orderType.uppercase() == "DINE-IN" || orderType.uppercase() == "DINEIN"
+            val kitchenReceiptText = if (isDineIn) {
+                buildDineInKitchenReceiptText(orderData)
+            } else {
+                buildKitchenReceiptText(orderData)
+            }
             PrintDocument(
-                if (isDineIn) buildDineInKitchenReceipt(orderData) else buildKitchenReceipt(orderData),
-                if (isDineIn) buildDineInKitchenReceiptText(orderData) else buildKitchenReceiptText(orderData)
+                buildTextRasterReceipt(kitchenReceiptText),
+                kitchenReceiptText
             )
         }
     }
@@ -826,7 +857,8 @@ class StarXpandPrinterHandler(private val context: Context) : MethodChannel.Meth
             result,
             "Print customer receipt"
         ) {
-            PrintDocument(buildCustomerReceipt(orderData), buildCustomerReceiptText(orderData))
+            val customerReceiptText = buildCustomerReceiptText(orderData)
+            PrintDocument(buildTextRasterReceipt(customerReceiptText), customerReceiptText)
         }
     }
 
@@ -1639,18 +1671,19 @@ class StarXpandPrinterHandler(private val context: Context) : MethodChannel.Meth
         return printerBuilder
     }
 
-    private fun receiptDivider(char: Char = '-'): String = char.toString().repeat(42)
+    private fun receiptDivider(char: Char = '-'): String = char.toString().repeat(receiptTextColumns)
 
     private fun money(value: Double): String = "$" + String.format("%.2f", value)
 
-    private fun receiptColumns(left: String, right: String, width: Int = 42): String {
-        val safeLeft = left.take(width)
+    private fun receiptColumns(left: String, right: String, width: Int = receiptTextColumns): String {
         val safeRight = right.take(width)
+        val maxLeftLength = (width - safeRight.length - 1).coerceAtLeast(0)
+        val safeLeft = left.take(maxLeftLength)
         val spaces = (width - safeLeft.length - safeRight.length).coerceAtLeast(1)
         return safeLeft + " ".repeat(spaces) + safeRight
     }
 
-    private fun receiptCenter(text: String, width: Int = 42): String {
+    private fun receiptCenter(text: String, width: Int = receiptTextColumns): String {
         if (text.length >= width) return text
         val leftPadding = (width - text.length) / 2
         return " ".repeat(leftPadding) + text
@@ -1663,16 +1696,84 @@ class StarXpandPrinterHandler(private val context: Context) : MethodChannel.Meth
         return if (group.isNotEmpty() && !name.contains(":")) "$group: $name" else name
     }
 
-    private fun appendWrapped(builder: StringBuilder, text: String, indent: String = "", width: Int = 42) {
+    private fun appendWrapped(
+        builder: StringBuilder,
+        text: String,
+        indent: String = "",
+        width: Int = receiptTextColumns,
+        bold: Boolean = false,
+        italic: Boolean = false
+    ) {
         if (text.isBlank()) return
         var current = text.trim()
         val contentWidth = (width - indent.length).coerceAtLeast(12)
         while (current.length > contentWidth) {
             val splitAt = current.take(contentWidth + 1).lastIndexOf(' ').takeIf { it > 0 } ?: contentWidth
-            builder.append(indent).append(current.take(splitAt).trim()).append('\n')
+            appendReceiptTextLine(builder, indent, current.take(splitAt).trim(), bold, italic)
             current = current.drop(splitAt).trim()
         }
-        builder.append(indent).append(current).append('\n')
+        appendReceiptTextLine(builder, indent, current, bold, italic)
+    }
+
+    private fun appendReceiptTextLine(
+        builder: StringBuilder,
+        indent: String,
+        text: String,
+        bold: Boolean,
+        italic: Boolean
+    ) {
+        if (bold) builder.append("**")
+        if (italic) builder.append("//")
+        builder.append(indent).append(text)
+        if (italic) builder.append("//")
+        if (bold) builder.append("**")
+        builder.append('\n')
+    }
+
+    private fun wrapReceiptLines(text: String, width: Int): List<String> {
+        if (text.isBlank()) return emptyList()
+        val lines = mutableListOf<String>()
+        var current = text.trim()
+        val safeWidth = width.coerceAtLeast(12)
+        while (current.length > safeWidth) {
+            val splitAt = current.take(safeWidth + 1).lastIndexOf(' ').takeIf { it > 0 } ?: safeWidth
+            lines.add(current.take(splitAt).trim())
+            current = current.drop(splitAt).trim()
+        }
+        lines.add(current)
+        return lines
+    }
+
+    private fun appendCenteredWrapped(builder: StringBuilder, text: String) {
+        for (line in wrapReceiptLines(text, receiptTextColumns)) {
+            builder.append(receiptCenter(line)).append('\n')
+        }
+    }
+
+    private fun appendReceiptPriceRow(
+        builder: StringBuilder,
+        left: String,
+        right: String,
+        bold: Boolean = false
+    ) {
+        val safeRight = right.take(receiptTextColumns)
+        val leftWidth = (receiptTextColumns - safeRight.length - 1).coerceAtLeast(12)
+        val leftLines = wrapReceiptLines(left, leftWidth)
+        if (leftLines.isEmpty()) return
+
+        val firstLeft = leftLines.first()
+        val spaces = (receiptTextColumns - firstLeft.length - safeRight.length).coerceAtLeast(1)
+        appendReceiptTextLine(
+            builder,
+            "",
+            firstLeft + " ".repeat(spaces) + safeRight,
+            bold,
+            false
+        )
+
+        for (line in leftLines.drop(1)) {
+            appendReceiptTextLine(builder, "  ", line, bold, false)
+        }
     }
 
     private fun buildCustomerReceiptText(orderData: Map<*, *>): String {
@@ -1683,46 +1784,51 @@ class StarXpandPrinterHandler(private val context: Context) : MethodChannel.Meth
         val orderNumber = (orderData["orderNumber"] as? String) ?: ""
         val orderDate = (orderData["orderDate"] as? String) ?: ""
         val customerName = (orderData["customerName"] as? String) ?: ""
+        val customerPhone = (orderData["customerPhone"] as? String) ?: ""
         val orderNote = (orderData["orderNote"] as? String) ?: ""
         val items = (orderData["items"] as? List<*>) ?: emptyList<Any>()
         val subtotal = (orderData["subtotal"] as? Number)?.toDouble() ?: 0.0
+        val discount = (orderData["discount"] as? Number)?.toDouble() ?: 0.0
         val tax = (orderData["tax"] as? Number)?.toDouble() ?: 0.0
         val total = (orderData["total"] as? Number)?.toDouble() ?: 0.0
 
         return buildString {
-            append("**").append(storeName).append("**\n")
-            appendWrapped(this, storeAddress)
-            appendWrapped(this, storePhone)
-            appendWrapped(this, storeEmail)
+            append("**").append(receiptCenter(storeName)).append("**\n")
+            appendCenteredWrapped(this, storeAddress)
+            appendCenteredWrapped(this, storePhone)
+            appendCenteredWrapped(this, storeEmail)
             append(receiptDivider()).append('\n')
-            append(receiptColumns("Order:", "#$orderNumber")).append('\n')
-            append(receiptColumns("Customer:", customerName)).append('\n')
-            append(receiptColumns("Date:", orderDate)).append('\n')
-            if (orderNote.isNotEmpty()) appendWrapped(this, "Order Note: $orderNote")
+            append(receiptColumns("Order Date:", orderDate)).append('\n')
+            append(receiptColumns("Order #:", orderNumber)).append('\n')
+            append(receiptColumns("Customer Name:", customerName)).append('\n')
+            append(receiptColumns("Customer Phone:", customerPhone)).append('\n')
             append(receiptDivider()).append('\n')
-            append(receiptColumns("Item", "Qty   Price")).append('\n')
+            append(receiptColumns("Item", "Price")).append('\n')
             append(receiptDivider()).append('\n')
             for (item in items) {
                 val itemMap = item as? Map<*, *> ?: continue
                 val quantity = (itemMap["quantity"] as? Number)?.toInt() ?: 1
                 val name = (itemMap["name"] as? String) ?: ""
                 val price = (itemMap["price"] as? Number)?.toDouble() ?: 0.0
-                append(receiptColumns(name, "$quantity  ${money(price)}")).append('\n')
+                appendReceiptPriceRow(this, "$quantity x $name", money(price), bold = true)
                 val modifiers = (itemMap["modifiers"] as? List<*>) ?: emptyList<Any>()
                 for (modifier in modifiers) {
                     val modMap = modifier as? Map<*, *> ?: continue
-                    appendWrapped(this, "- ${modMap["name"] as? String ?: ""}", "  ")
+                    val modName = formatModifierForKitchen(modMap)
+                    if (modName.isNotEmpty()) appendWrapped(this, modName, "  ")
                 }
                 val itemNote = (itemMap["itemNote"] as? String) ?: ""
-                if (itemNote.isNotEmpty()) appendWrapped(this, "- $itemNote", "  ")
+                if (itemNote.isNotEmpty()) appendWrapped(this, itemNote, "  ")
                 append('\n')
             }
             append(receiptDivider()).append('\n')
-            append(receiptColumns("Subtotal", money(subtotal))).append('\n')
-            if (tax > 0) append(receiptColumns("Tax", money(tax))).append('\n')
-            append("**").append(receiptColumns("TOTAL", money(total))).append("**\n")
+            append(receiptColumns("Sub Total:", money(subtotal))).append('\n')
+            if (discount > 0) append(receiptColumns("Discount:", "-${money(discount)}")).append('\n')
+            if (tax > 0) append(receiptColumns("Tax:", money(tax))).append('\n')
+            append("**").append(receiptColumns("Total:", money(total))).append("**\n")
             append(receiptDivider()).append('\n')
-            append("Thank You!\nVisit Again\n\n")
+            append(receiptCenter("Thank you for your business!")).append('\n')
+            append(receiptCenter("Powered by: ZipZap POS")).append('\n')
         }
     }
 
@@ -1741,30 +1847,36 @@ class StarXpandPrinterHandler(private val context: Context) : MethodChannel.Meth
         val dueAt = (orderData["dueAt"] as? String) ?: ""
 
         return buildString {
+            append(receiptBorderMarker).append('\n')
             append("**").append(receiptCenter(storeName)).append("**\n")
-            append("**").append(receiptCenter(orderType)).append("**\n")
-            append("**").append(receiptCenter("Order #$orderNumber")).append("**\n")
-            append('\n')
+            append(receiptCenter(orderType.uppercase())).append('\n')
+            val orderLine = if (customerName.isNotEmpty()) {
+                "$customerName - $orderNumber"
+            } else {
+                "Order #$orderNumber"
+            }
+            append(receiptCenter(orderLine)).append('\n')
             if (isReturningCustomer) {
                 val orderLabel = if (customerOrderCount == 1) "Order" else "Orders"
-                append("**Returning Customer")
-                if (customerOrderCount > 0) append(" [$customerOrderCount $orderLabel]")
-                append("**\n")
+                val returningLine = if (customerOrderCount > 0) {
+                    "Returning Customer [$customerOrderCount $orderLabel]"
+                } else {
+                    "Returning Customer"
+                }
+                append(receiptCenter(returningLine)).append('\n')
             }
-            if (customerName.isNotEmpty()) append(receiptColumns("Customer :", customerName)).append('\n')
-            if (customerPhone.isNotEmpty()) append(receiptColumns("Phone :", customerPhone)).append('\n')
-            if (placedAt.isNotEmpty()) append(receiptColumns("Placed at :", placedAt)).append('\n')
-            if (dueAt.isNotEmpty()) append(receiptColumns("Due at :", dueAt)).append('\n')
+            if (customerPhone.isNotEmpty()) append(receiptCenter("Phone: $customerPhone")).append('\n')
             append('\n')
+            append(receiptDivider()).append('\n')
             if (note.isNotEmpty()) {
-                append("**Kitchen Note**\n")
-                appendWrapped(this, note)
-                append('\n')
+                appendWrapped(this, "Order Note: $note", italic = true)
                 append(receiptDivider()).append('\n')
             }
-            append("**Items**\n")
             appendKitchenItemsText(this, items)
             append(receiptDivider()).append('\n')
+            append('\n')
+            if (placedAt.isNotEmpty()) append(receiptCenter("Placed at: $placedAt")).append('\n')
+            if (dueAt.isNotEmpty()) append(receiptCenter("Due at: $dueAt")).append('\n')
         }
     }
 
@@ -1773,11 +1885,12 @@ class StarXpandPrinterHandler(private val context: Context) : MethodChannel.Meth
         val floorPlanName = (orderData["floorPlanName"] as? String) ?: ""
         val tableName = (orderData["tableName"] as? String) ?: ""
         val partySize = (orderData["partySize"] as? Number)?.toInt() ?: 0
+        base.append(receiptBorderMarker).append('\n')
         if (floorPlanName.isNotEmpty() || tableName.isNotEmpty()) {
-            base.append("**").append(floorPlanName).append(" ").append(tableName).append("**\n")
+            base.append("**").append(receiptCenter("$floorPlanName $tableName".trim())).append("**\n")
         }
-        if (partySize > 0) base.append("Party of ").append(partySize).append('\n')
-        base.append(buildKitchenReceiptText(orderData))
+        if (partySize > 0) base.append(receiptCenter("Party of $partySize")).append('\n')
+        base.append(buildKitchenReceiptText(orderData).removePrefix(receiptBorderMarker).trimStart('\n'))
         return base.toString()
     }
 
@@ -1786,16 +1899,17 @@ class StarXpandPrinterHandler(private val context: Context) : MethodChannel.Meth
             val itemMap = item as? Map<*, *> ?: continue
             val quantity = (itemMap["quantity"] as? Number)?.toInt() ?: 1
             val name = (itemMap["name"] as? String) ?: ""
-            builder.append("**").append(quantity).append(" \u00d7 ").append(name).append("**\n")
+            appendWrapped(builder, "$quantity * $name", bold = true)
             val modifiers = (itemMap["modifiers"] as? List<*>) ?: emptyList<Any>()
             for (modifier in modifiers) {
                 val modMap = modifier as? Map<*, *> ?: continue
                 val modName = formatModifierForKitchen(modMap)
-                if (modName.isNotEmpty()) appendWrapped(builder, "\u2022 $modName", "  ")
+                if (modName.isNotEmpty()) appendWrapped(builder, "* $modName", "  ")
             }
             val itemNote = (itemMap["itemNote"] as? String) ?: ""
-            if (itemNote.isNotEmpty()) appendWrapped(builder, "Item Note: $itemNote", "  ")
-            builder.append('\n')
+            if (itemNote.isNotEmpty()) {
+                appendWrapped(builder, "Order Note: $itemNote", italic = true)
+            }
         }
     }
 
