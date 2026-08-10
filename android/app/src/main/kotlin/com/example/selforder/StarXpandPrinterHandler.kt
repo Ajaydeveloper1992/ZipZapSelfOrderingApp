@@ -252,19 +252,59 @@ class StarXpandPrinterHandler(private val context: Context) : MethodChannel.Meth
         val normalPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.BLACK
             textSize = 24f
-            typeface = Typeface.MONOSPACE
+            typeface = Typeface.create("sans-serif-condensed", Typeface.NORMAL)
         }
         val boldPaint = Paint(normalPaint).apply {
-            typeface = Typeface.create(Typeface.MONOSPACE, Typeface.BOLD)
+            typeface = Typeface.create("sans-serif-condensed", Typeface.BOLD)
+        }
+        val titlePaint = Paint(normalPaint).apply {
+            textSize = 34f
+            typeface = Typeface.create("sans-serif-condensed", Typeface.BOLD)
+        }
+        val heroPaint = Paint(normalPaint).apply {
+            textSize = 54f
+            typeface = Typeface.create("sans-serif-condensed", Typeface.BOLD)
+        }
+        val itemPaint = Paint(normalPaint).apply {
+            textSize = 42f
+            typeface = Typeface.create("sans-serif-condensed", Typeface.BOLD)
         }
         val italicPaint = Paint(normalPaint).apply {
-            typeface = Typeface.create(Typeface.MONOSPACE, Typeface.ITALIC)
+            typeface = Typeface.create("sans-serif-condensed", Typeface.ITALIC)
         }
-        val lineHeight = (normalPaint.fontMetrics.descent - normalPaint.fontMetrics.ascent + 8).toInt()
         val horizontalPadding = if (hasBorder) 28f else 16f
         val verticalPadding = if (hasBorder) 28 else 18
         val lines = receiptText.trimEnd('\n').split('\n')
-        val bitmapHeight = (lines.size * lineHeight + verticalPadding * 2).coerceAtLeast(lineHeight + verticalPadding * 2)
+
+        fun cleanLine(line: String): String {
+            return line
+                .removePrefix("##").removeSuffix("##")
+                .removePrefix("@@").removeSuffix("@@")
+                .removePrefix("!!").removeSuffix("!!")
+                .removePrefix("**").removeSuffix("**")
+                .removePrefix("//").removeSuffix("//")
+        }
+
+        fun paintForLine(line: String): Paint {
+            return when {
+                line.startsWith("##") && line.endsWith("##") -> heroPaint
+                line.startsWith("@@") && line.endsWith("@@") -> titlePaint
+                line.startsWith("!!") && line.endsWith("!!") -> itemPaint
+                line.startsWith("**") && line.endsWith("**") -> boldPaint
+                line.startsWith("//") && line.endsWith("//") -> italicPaint
+                else -> normalPaint
+            }
+        }
+
+        fun lineHeight(line: String): Int {
+            if (line == "__RULE__") return 18
+            if (line == "__DOT__") return 14
+            val metrics = paintForLine(line).fontMetrics
+            return (metrics.descent - metrics.ascent + 10).toInt()
+        }
+
+        val bitmapHeight = (lines.sumOf { lineHeight(it) } + verticalPadding * 2)
+            .coerceAtLeast(lineHeight("") + verticalPadding * 2)
         val bitmap = Bitmap.createBitmap(printableRasterWidthPx, bitmapHeight, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)
         canvas.drawColor(Color.WHITE)
@@ -278,22 +318,47 @@ class StarXpandPrinterHandler(private val context: Context) : MethodChannel.Meth
             canvas.drawRect(4f, 4f, printableRasterWidthPx - 5f, bitmapHeight - 5f, borderPaint)
         }
 
-        var y = verticalPadding - normalPaint.fontMetrics.ascent
+        val rulePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.rgb(120, 120, 120)
+            strokeWidth = 3f
+        }
+        val dotPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.rgb(150, 150, 150)
+            strokeWidth = 2f
+        }
+
+        var y = verticalPadding.toFloat()
         for (line in lines) {
-            val isBold = line.startsWith("**") && line.endsWith("**")
-            val isItalic = line.startsWith("//") && line.endsWith("//")
-            val paint = when {
-                isBold -> boldPaint
-                isItalic -> italicPaint
-                else -> normalPaint
+            if (line == "__RULE__") {
+                y += 8f
+                canvas.drawLine(horizontalPadding, y, printableRasterWidthPx - horizontalPadding, y, rulePaint)
+                y += 10f
+                continue
             }
-            val printableLine = line
-                .removePrefix("**")
-                .removeSuffix("**")
-                .removePrefix("//")
-                .removeSuffix("//")
-            canvas.drawText(printableLine, horizontalPadding, y, paint)
-            y += lineHeight
+            if (line == "__DOT__") {
+                y += 6f
+                var x = horizontalPadding
+                while (x < printableRasterWidthPx - horizontalPadding) {
+                    canvas.drawLine(x, y, (x + 5f).coerceAtMost(printableRasterWidthPx - horizontalPadding), y, dotPaint)
+                    x += 12f
+                }
+                y += 8f
+                continue
+            }
+
+            val paint = paintForLine(line)
+            val printableLine = cleanLine(line)
+            val centered = (line.startsWith("##") && line.endsWith("##")) ||
+                (line.startsWith("@@") && line.endsWith("@@"))
+            val x = if (centered) {
+                ((printableRasterWidthPx - paint.measureText(printableLine)) / 2f)
+                    .coerceAtLeast(horizontalPadding)
+            } else {
+                horizontalPadding
+            }
+            y += -paint.fontMetrics.ascent
+            canvas.drawText(printableLine, x, y, paint)
+            y += paint.fontMetrics.descent + 10f
         }
 
         return bitmap
@@ -879,21 +944,17 @@ class StarXpandPrinterHandler(private val context: Context) : MethodChannel.Meth
         val printerBuilder = PrinterBuilder()
 
         printerBuilder
-            .styleMagnification(MagnificationParameter(2, 2))
-            .styleBold(true)
             .styleAlignment(Alignment.Center)
-            .actionPrintText("$storeName\n")
-            .actionFeed(0.5)
-            .styleMagnification(MagnificationParameter(1, 1))
-            .styleBold(true)
-            .actionPrintText("$orderType\n")
-            .actionFeed(0.5)
             .styleMagnification(MagnificationParameter(2, 2))
-            .actionPrintText("Order #$orderNumber\n")
+            .styleBold(true)
+            .actionPrintText("$storeName\n")
+            .actionFeed(0.4)
             .styleMagnification(MagnificationParameter(1, 1))
-            .styleBold(false)
-            .styleAlignment(Alignment.Left)
-            .actionFeed(0.8)
+            .actionPrintText("${orderType.uppercase()}\n")
+            .actionFeed(0.4)
+            .actionPrintText(
+                if (customerName.isNotEmpty()) "$customerName - $orderNumber\n" else "Order #$orderNumber\n"
+            )
 
         if (isReturningCustomer) {
             val orderLabel = if (customerOrderCount == 1) "Order" else "Orders"
@@ -903,52 +964,33 @@ class StarXpandPrinterHandler(private val context: Context) : MethodChannel.Meth
                 "Returning Customer"
             }
             printerBuilder
-                .styleBold(true)
+                .actionFeed(0.2)
                 .actionPrintText("$returningText\n")
-                .styleBold(false)
-                .actionFeed(0.3)
         }
 
-        if (customerName.isNotEmpty()) {
-            printerBuilder.actionPrintText("Customer : ", TextParameter().setWidth(24))
-                .actionPrintText("$customerName\n", TextParameter().setWidth(48, TextWidthParameter().setAlignment(TextAlignment.Right)))
-        }
         if (customerPhone.isNotEmpty()) {
-            printerBuilder.actionPrintText("Phone : ", TextParameter().setWidth(24))
-                .actionPrintText("$customerPhone\n", TextParameter().setWidth(48, TextWidthParameter().setAlignment(TextAlignment.Right)))
-        }
-        if (placedAt.isNotEmpty()) {
-            printerBuilder.actionPrintText("Placed at : ", TextParameter().setWidth(24))
-                .actionPrintText("$placedAt\n", TextParameter().setWidth(48, TextWidthParameter().setAlignment(TextAlignment.Right)))
-        }
-        if (dueAt.isNotEmpty()) {
-            printerBuilder.actionPrintText("Due at : ", TextParameter().setWidth(24))
-                .actionPrintText("$dueAt\n", TextParameter().setWidth(48, TextWidthParameter().setAlignment(TextAlignment.Right)))
+            printerBuilder
+                .actionFeed(0.2)
+                .actionPrintText("Phone: $customerPhone\n")
         }
 
         printerBuilder
+            .styleBold(false)
+            .styleMagnification(MagnificationParameter(1, 1))
             .actionFeed(0.8)
-            .actionPrintRuledLine(RuledLineParameter(72.0).setThickness(0.1))
+            .actionPrintRuledLine(RuledLineParameter(72.0).setThickness(0.25))
             .actionFeed(0.8)
 
         if (note.isNotEmpty()) {
             printerBuilder
-                .styleBold(true)
-                .actionPrintText("Kitchen Note\n")
+                .actionPrintText("Order Note: $note\n")
                 .styleBold(false)
-                .actionPrintText("$note\n")
                 .actionFeed(0.8)
-                .actionPrintRuledLine(RuledLineParameter(72.0).setThickness(0.1))
+                .actionPrintRuledLine(RuledLineParameter(72.0).setThickness(0.2))
                 .actionFeed(0.8)
         }
 
-        printerBuilder
-            .styleBold(true)
-            .actionPrintText("Items\n")
-            .styleBold(false)
-            .actionFeed(0.5)
-
-        for (item in items) {
+        for ((index, item) in items.withIndex()) {
             val itemMap = item as? Map<*, *> ?: continue
             val quantity = (itemMap["quantity"] as? Number)?.toInt() ?: 1
             val name = (itemMap["name"] as? String) ?: ""
@@ -956,26 +998,65 @@ class StarXpandPrinterHandler(private val context: Context) : MethodChannel.Meth
             val itemNote = (itemMap["itemNote"] as? String) ?: ""
 
             printerBuilder
+                .styleAlignment(Alignment.Left)
+                .styleMagnification(MagnificationParameter(2, 2))
                 .styleBold(true)
-                .actionPrintText("$quantity \u00d7 $name\n")
+                .actionPrintText("$quantity * $name\n")
+                .styleMagnification(MagnificationParameter(1, 1))
                 .styleBold(false)
+                .actionFeed(0.5)
 
             for (modifier in modifiers) {
                 val modMap = modifier as? Map<*, *> ?: continue
                 val modName = formatModifierForKitchen(modMap)
                 if (modName.isNotEmpty()) {
-                    printerBuilder.actionPrintText("  \u2022 $modName\n")
+                    val label = modName.substringBefore(":", "")
+                    val value = modName.substringAfter(":", "")
+                    if (label.isNotEmpty() && value != modName) {
+                        printerBuilder
+                            .actionPrintText("• ")
+                            .styleBold(true)
+                            .actionPrintText("$label:")
+                            .styleBold(false)
+                            .actionPrintText(" ${value.trim()}\n")
+                    } else {
+                        printerBuilder.actionPrintText("• $modName\n")
+                    }
                 }
             }
 
             if (itemNote.isNotEmpty()) {
-                printerBuilder.actionPrintText("  Item Note: $itemNote\n")
+                printerBuilder
+                    .actionPrintText("Order Note: ${itemNote.removePrefix("Item Note:").trim()}\n")
             }
 
+            if (index != items.lastIndex) {
+                printerBuilder
+                    .actionFeed(0.5)
+                    .actionPrintText("${receiptDivider('.')}\n")
+                    .actionFeed(0.5)
+            }
+        }
+
+        printerBuilder
+            .actionFeed(0.8)
+            .actionPrintRuledLine(RuledLineParameter(72.0).setThickness(0.25))
+            .actionFeed(0.8)
+            .styleAlignment(Alignment.Center)
+
+        if (placedAt.isNotEmpty()) {
             printerBuilder
-                .actionFeed(0.5)
-                .actionPrintRuledLine(RuledLineParameter(72.0).setThickness(0.1))
-                .actionFeed(0.5)
+                .styleBold(true)
+                .actionPrintText("Placed at: ")
+                .styleBold(false)
+                .actionPrintText("$placedAt\n")
+        }
+        if (dueAt.isNotEmpty()) {
+            printerBuilder
+                .styleBold(true)
+                .actionPrintText("Due at: ")
+                .styleBold(false)
+                .actionPrintText("$dueAt\n")
         }
 
         printerBuilder
@@ -1793,7 +1874,7 @@ class StarXpandPrinterHandler(private val context: Context) : MethodChannel.Meth
         val total = (orderData["total"] as? Number)?.toDouble() ?: 0.0
 
         return buildString {
-            append("**").append(receiptCenter(storeName)).append("**\n")
+            append("##").append(storeName).append("##\n")
             appendCenteredWrapped(this, storeAddress)
             appendCenteredWrapped(this, storePhone)
             appendCenteredWrapped(this, storeEmail)
@@ -1848,14 +1929,14 @@ class StarXpandPrinterHandler(private val context: Context) : MethodChannel.Meth
 
         return buildString {
             append(receiptBorderMarker).append('\n')
-            append("**").append(receiptCenter(storeName)).append("**\n")
-            append(receiptCenter(orderType.uppercase())).append('\n')
+            append("##").append(storeName).append("##\n")
+            append("@@").append(orderType.uppercase()).append("@@\n")
             val orderLine = if (customerName.isNotEmpty()) {
                 "$customerName - $orderNumber"
             } else {
                 "Order #$orderNumber"
             }
-            append(receiptCenter(orderLine)).append('\n')
+            append("@@").append(orderLine).append("@@\n")
             if (isReturningCustomer) {
                 val orderLabel = if (customerOrderCount == 1) "Order" else "Orders"
                 val returningLine = if (customerOrderCount > 0) {
@@ -1863,20 +1944,20 @@ class StarXpandPrinterHandler(private val context: Context) : MethodChannel.Meth
                 } else {
                     "Returning Customer"
                 }
-                append(receiptCenter(returningLine)).append('\n')
+                append("@@").append(returningLine).append("@@\n")
             }
-            if (customerPhone.isNotEmpty()) append(receiptCenter("Phone: $customerPhone")).append('\n')
+            if (customerPhone.isNotEmpty()) append("@@Phone: ").append(customerPhone).append("@@\n")
             append('\n')
-            append(receiptDivider()).append('\n')
+            append("__RULE__\n")
             if (note.isNotEmpty()) {
                 appendWrapped(this, "Order Note: $note", italic = true)
-                append(receiptDivider()).append('\n')
+                append("__RULE__\n")
             }
             appendKitchenItemsText(this, items)
-            append(receiptDivider()).append('\n')
+            append("__RULE__\n")
             append('\n')
-            if (placedAt.isNotEmpty()) append(receiptCenter("Placed at: $placedAt")).append('\n')
-            if (dueAt.isNotEmpty()) append(receiptCenter("Due at: $dueAt")).append('\n')
+            if (placedAt.isNotEmpty()) append("@@Placed at: ").append(placedAt).append("@@\n")
+            if (dueAt.isNotEmpty()) append("@@Due at: ").append(dueAt).append("@@\n")
         }
     }
 
@@ -1895,20 +1976,24 @@ class StarXpandPrinterHandler(private val context: Context) : MethodChannel.Meth
     }
 
     private fun appendKitchenItemsText(builder: StringBuilder, items: List<*>) {
-        for (item in items) {
+        for ((index, item) in items.withIndex()) {
             val itemMap = item as? Map<*, *> ?: continue
             val quantity = (itemMap["quantity"] as? Number)?.toInt() ?: 1
             val name = (itemMap["name"] as? String) ?: ""
-            appendWrapped(builder, "$quantity * $name", bold = true)
+            builder.append("!!").append(quantity).append(" * ").append(name).append("!!\n")
             val modifiers = (itemMap["modifiers"] as? List<*>) ?: emptyList<Any>()
             for (modifier in modifiers) {
                 val modMap = modifier as? Map<*, *> ?: continue
                 val modName = formatModifierForKitchen(modMap)
-                if (modName.isNotEmpty()) appendWrapped(builder, "* $modName", "  ")
+                if (modName.isNotEmpty()) appendWrapped(builder, "• $modName")
             }
             val itemNote = (itemMap["itemNote"] as? String) ?: ""
             if (itemNote.isNotEmpty()) {
-                appendWrapped(builder, "Order Note: $itemNote", italic = true)
+                val normalizedNote = itemNote.removePrefix("Item Note:").trim()
+                appendWrapped(builder, "Order Note: $normalizedNote", italic = true)
+            }
+            if (index != items.lastIndex) {
+                builder.append("__DOT__\n")
             }
         }
     }

@@ -160,7 +160,7 @@ class _OrderDetailsActionsState extends State<OrderDetailsActions> {
 
       if (mounted) {
         if (allSuccess) {
-          AppToast.success(
+          AppToast.printConfirmation(
             context: context,
             title: 'Receipt Printed',
             description: 'Customer receipt printed successfully',

@@ -1493,7 +1493,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
 
       if (mounted) {
         if (allSuccess) {
-          AppToast.success(
+          AppToast.printConfirmation(
             context: context,
             title: 'Receipt Printed',
             description: _splitQty > 1
@@ -1579,7 +1579,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
 
       if (mounted) {
         if (allSuccess) {
-          AppToast.success(
+          AppToast.printConfirmation(
             context: context,
             title: 'All Receipts Printed',
             description: _splitQty > 1

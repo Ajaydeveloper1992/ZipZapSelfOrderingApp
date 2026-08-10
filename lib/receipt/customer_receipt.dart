@@ -5,6 +5,7 @@ import 'shared/receipt_widgets.dart';
 class CustomerReceipt extends StatelessWidget {
   final ReceiptModel model;
   final double width;
+  static const String _receiptFont = 'sans-serif-condensed';
 
   const CustomerReceipt({super.key, required this.model, this.width = 560});
 
@@ -58,12 +59,15 @@ class CustomerReceipt extends StatelessWidget {
         Text(
           model.restaurantName,
           textAlign: TextAlign.center,
-          style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+          style: const TextStyle(
+            fontFamily: _receiptFont,
+            fontSize: 46,
             fontWeight: FontWeight.w900,
-            letterSpacing: 0.3,
+            color: Colors.black,
+            height: 0.98,
           ),
         ),
-        const SizedBox(height: 6),
+        const SizedBox(height: 10),
         if (model.address != null) ReceiptSubtext(model.address!),
         if (model.phone != null) ...[
           const SizedBox(height: 2),

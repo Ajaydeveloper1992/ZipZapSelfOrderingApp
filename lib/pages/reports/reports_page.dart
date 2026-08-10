@@ -1188,7 +1188,7 @@ class _ReportsPageState extends State<ReportsPage> {
       });
 
       if (allSuccess) {
-        AppToast.success(
+        AppToast.printConfirmation(
           context: context,
           title: 'Report Printed',
           description: 'Financial report printed successfully',

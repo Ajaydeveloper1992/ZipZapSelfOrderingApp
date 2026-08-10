@@ -1610,19 +1610,41 @@ class _NewDineInPageState extends State<NewDineInPage> {
           .where((item) => item.itemStatus != 'Voided')
           .toList();
 
-      // Print to each kitchen printer with label-based filtering
       bool allSuccess = true;
       bool anyPrinted = false;
       bool usedFallback = false;
-      // Track which item IDs landed on at least one printer so we can
-      // rescue items that no printer's label set matched.
-      final printedItemIds = <String>{};
+      final itemsByPrinter = <Printer, List<CartItem>>{};
+      final matchedItemIds = <String>{};
       for (final printer in kitchenPrinters) {
         final filteredItems = _filterItemsForPrinter(allItems, printer);
         if (filteredItems.isEmpty) continue;
 
+        itemsByPrinter[printer] = filteredItems;
+        matchedItemIds.addAll(filteredItems.map((item) => item.id));
+      }
+
+      final unmatchedItems = allItems
+          .where((i) => !matchedItemIds.contains(i.id))
+          .toList();
+      if (unmatchedItems.isNotEmpty) {
+        usedFallback = true;
+        for (final printer in kitchenPrinters) {
+          final existingItems = itemsByPrinter[printer] ?? const <CartItem>[];
+          final existingIds = existingItems.map((item) => item.id).toSet();
+          itemsByPrinter[printer] = [
+            ...existingItems,
+            ...unmatchedItems.where((item) => !existingIds.contains(item.id)),
+          ];
+        }
+      }
+
+      for (final entry in itemsByPrinter.entries) {
+        final printer = entry.key;
+        final itemsToPrint = entry.value;
+        if (itemsToPrint.isEmpty) continue;
+
         anyPrinted = true;
-        final orderData = _formatOrderDataForPendingItems(filteredItems);
+        final orderData = _formatOrderDataForPendingItems(itemsToPrint);
         try {
           final interfaceType = _printerTypeToString(printer.type);
           final success = await PrinterService.printKitchenOrder(
@@ -1631,52 +1653,12 @@ class _NewDineInPageState extends State<NewDineInPage> {
             orderData: orderData,
             requestId: requestId,
           );
-          if (success) {
-            for (final item in filteredItems) {
-              printedItemIds.add(item.id);
-            }
-          } else {
+          if (!success) {
             allSuccess = false;
           }
         } catch (e) {
           debugPrint('Error printing to ${printer.name}: $e');
           allSuccess = false;
-        }
-      }
-
-      // Safety fallback: any item that didn't end up on any printer (label
-      // mismatch on every kitchen printer) is sent to every kitchen printer
-      // so a wildcard item like a custom item can't mask labelled items
-      // being silently dropped.
-      if (kitchenPrinters.isNotEmpty) {
-        final unmatchedItems = allItems
-            .where((i) => !printedItemIds.contains(i.id))
-            .toList();
-        if (unmatchedItems.isNotEmpty) {
-          usedFallback = true;
-          final orderData = _formatOrderDataForPendingItems(unmatchedItems);
-          for (final printer in kitchenPrinters) {
-            anyPrinted = true;
-            try {
-              final interfaceType = _printerTypeToString(printer.type);
-              final success = await PrinterService.printKitchenOrder(
-                interfaceType: interfaceType,
-                identifier: printer.identifier,
-                orderData: orderData,
-                requestId: requestId,
-              );
-              if (success) {
-                for (final item in unmatchedItems) {
-                  printedItemIds.add(item.id);
-                }
-              } else {
-                allSuccess = false;
-              }
-            } catch (e) {
-              debugPrint('Error printing to ${printer.name} (fallback): $e');
-              allSuccess = false;
-            }
-          }
         }
       }
 
@@ -1702,7 +1684,7 @@ class _NewDineInPageState extends State<NewDineInPage> {
                 'No items matched kitchen printer labels. Check printer label settings.',
           );
         } else if (allSuccess) {
-          AppToast.success(
+          AppToast.printConfirmation(
             context: context,
             title: 'Sent to Kitchen',
             description: usedFallback
@@ -1809,20 +1791,42 @@ class _NewDineInPageState extends State<NewDineInPage> {
         return;
       }
 
-      // Print to each kitchen printer with label-based filtering
       bool allSuccess = true;
       bool anyPrinted = false;
       bool usedFallback = false;
-      // Track which item IDs landed on at least one printer so we can
-      // rescue items that no printer's label set matched.
-      final printedItemIds = <String>{};
+      final itemsByPrinter = <Printer, List<CartItem>>{};
+      final matchedItemIds = <String>{};
       for (final printer in kitchenPrinters) {
         final filteredItems = _filterItemsForPrinter(pendingItems, printer);
         if (filteredItems.isEmpty) continue;
 
+        itemsByPrinter[printer] = filteredItems;
+        matchedItemIds.addAll(filteredItems.map((item) => item.id));
+      }
+
+      final unmatchedItems = pendingItems
+          .where((i) => !matchedItemIds.contains(i.id))
+          .toList();
+      if (unmatchedItems.isNotEmpty) {
+        usedFallback = true;
+        for (final printer in kitchenPrinters) {
+          final existingItems = itemsByPrinter[printer] ?? const <CartItem>[];
+          final existingIds = existingItems.map((item) => item.id).toSet();
+          itemsByPrinter[printer] = [
+            ...existingItems,
+            ...unmatchedItems.where((item) => !existingIds.contains(item.id)),
+          ];
+        }
+      }
+
+      for (final entry in itemsByPrinter.entries) {
+        final printer = entry.key;
+        final itemsToPrint = entry.value;
+        if (itemsToPrint.isEmpty) continue;
+
         anyPrinted = true;
         final orderData = _formatOrderDataForPendingItems(
-          filteredItems,
+          itemsToPrint,
           cartDataOverride: capturedCartData,
           customerOverride: capturedCustomer,
           pickupTimeOverride: capturedPickupTime,
@@ -1841,62 +1845,15 @@ class _NewDineInPageState extends State<NewDineInPage> {
             requestId: effectiveRequestId,
           );
           if (success) {
-            for (final item in filteredItems) {
-              printedItemIds.add(item.id);
-            }
+            debugPrint(
+              '[$effectiveRequestId] kitchen print succeeded items=${itemsToPrint.length}',
+            );
           } else {
             allSuccess = false;
           }
         } catch (e) {
           debugPrint('Error printing to ${printer.name}: $e');
           allSuccess = false;
-        }
-      }
-
-      // Safety fallback: any pending item that didn't end up on any printer
-      // (label mismatch on every kitchen printer) is sent to every kitchen
-      // printer. This rescues mismatched items even when other items in the
-      // same cart were already printed (e.g. a custom item went through as
-      // a wildcard).
-      if (kitchenPrinters.isNotEmpty) {
-        final unmatchedItems = pendingItems
-            .where((i) => !printedItemIds.contains(i.id))
-            .toList();
-        if (unmatchedItems.isNotEmpty) {
-          usedFallback = true;
-          final orderData = _formatOrderDataForPendingItems(
-            unmatchedItems,
-            cartDataOverride: capturedCartData,
-            customerOverride: capturedCustomer,
-            pickupTimeOverride: capturedPickupTime,
-            orderNumberOverride: capturedOrderNumber,
-            resolvedCustomerOverride: capturedResolvedCustomer,
-          );
-          for (final printer in kitchenPrinters) {
-            anyPrinted = true;
-            try {
-              final interfaceType = _printerTypeToString(printer.type);
-              debugPrint(
-                '[$effectiveRequestId] kitchen fallback submitting printer=${printer.name} model=${printer.modelName ?? 'unknown'} identifier=${printer.identifier}',
-              );
-              final success = await PrinterService.printKitchenOrder(
-                interfaceType: interfaceType,
-                identifier: printer.identifier,
-                orderData: orderData,
-                requestId: effectiveRequestId,
-              );
-              if (success) {
-                for (final item in unmatchedItems) {
-                  printedItemIds.add(item.id);
-                }
-              } else {
-                allSuccess = false;
-              }
-            } catch (e) {
-              debugPrint('Error printing to ${printer.name} (fallback): $e');
-              allSuccess = false;
-            }
-          }
         }
       }
 
@@ -1924,7 +1881,7 @@ class _NewDineInPageState extends State<NewDineInPage> {
                 'No items matched kitchen printer labels. Check printer label settings.',
           );
         } else if (allSuccess) {
-          AppToast.success(
+          AppToast.printConfirmation(
             context: context,
             title: 'Sent to Kitchen',
             description: usedFallback
@@ -2005,7 +1962,7 @@ class _NewDineInPageState extends State<NewDineInPage> {
       });
 
       if (allSuccess) {
-        AppToast.success(
+        AppToast.printConfirmation(
           context: context,
           title: 'Receipt Printed',
           description: 'Customer receipt printed successfully',
@@ -2082,7 +2039,7 @@ class _NewDineInPageState extends State<NewDineInPage> {
       });
 
       if (allSuccess) {
-        AppToast.success(
+        AppToast.printConfirmation(
           context: context,
           title: 'Quote Printed',
           description: 'Quote printed successfully',

@@ -357,10 +357,7 @@ class PrinterService {
   }
 
   // Save printer to localStorage
-  static Future<void> savePrinter(
-    Printer printer, {
-    bool mergeExistingAssignments = true,
-  }) async {
+  static Future<void> savePrinter(Printer printer) async {
     try {
       final prefs = await SharedPreferences.getInstance();
       final printers = await getSavedPrinters();
@@ -369,43 +366,16 @@ class PrinterService {
         'Saving printer: ${printer.name} (ID: ${printer.id}). Current printers count: ${printers.length}',
       );
 
-      // Remove existing printer entries with same ID or same identifier
-      // to avoid duplicate saved entries for the same physical printer.
-      Printer? existingPrinter;
-      for (final savedPrinter in printers) {
-        if (savedPrinter.id == printer.id ||
-            savedPrinter.identifier == printer.identifier) {
-          existingPrinter = savedPrinter;
-          break;
-        }
-      }
-      final mergedGroups = mergeExistingAssignments
-          ? {
-              ...?existingPrinter?.groups,
-              ...printer.groups,
-            }.toList()
-          : printer.groups;
-      final printerToSave = printer.copyWith(
-        id: existingPrinter?.id ?? printer.id,
-        groups: mergedGroups,
-        group: mergedGroups.isNotEmpty ? mergedGroups.first : printer.group,
-        selectedLabels: mergeExistingAssignments
-            ? (printer.selectedLabels.isNotEmpty
-                  ? printer.selectedLabels
-                  : existingPrinter?.selectedLabels)
-            : printer.selectedLabels,
-        modelName: printer.modelName ?? existingPrinter?.modelName,
-        ipAddress: printer.ipAddress ?? existingPrinter?.ipAddress,
-      );
+      // A physical printer can be assigned separately for receipt/customer and
+      // kitchen use. Keep those saved records independent and only replace the
+      // record being edited.
       final removedCount = printers.length;
-      printers.removeWhere(
-        (p) => p.id == printer.id || p.identifier == printer.identifier,
-      );
+      printers.removeWhere((p) => p.id == printer.id);
       if (removedCount != printers.length) {
-        debugPrint('Removed existing printer with same id/identifier');
+        debugPrint('Removed existing printer with same id');
       }
 
-      printers.add(printerToSave);
+      printers.add(printer);
       debugPrint('After adding, printers count: ${printers.length}');
 
       final jsonList = printers.map((p) => _printerToJson(p)).toList();
@@ -450,37 +420,13 @@ class PrinterService {
         'Loading printers from localStorage (${jsonString.length} chars)',
       );
       final jsonList = jsonDecode(jsonString) as List;
-      // Parse printers and deduplicate by identifier to avoid duplicate
-      // print jobs when the same physical printer was saved more than once.
       final parsed = jsonList.map((json) => _printerFromJson(json)).toList();
-      final Map<String, Printer> uniqueByIdentifier = {};
+      final Map<String, Printer> uniqueById = {};
       for (final p in parsed) {
-        // Use identifier as the canonical key for a physical printer
-        if (p.identifier.isEmpty) continue;
-        if (!uniqueByIdentifier.containsKey(p.identifier)) {
-          uniqueByIdentifier[p.identifier] = p;
-        } else {
-          final existing = uniqueByIdentifier[p.identifier]!;
-          final mergedGroups = {
-            ...existing.groups,
-            ...p.groups,
-          }.toList();
-          final mergedLabels = {
-            ...existing.selectedLabels,
-            ...p.selectedLabels,
-          }.toList();
-          uniqueByIdentifier[p.identifier] = existing.copyWith(
-            groups: mergedGroups,
-            group: mergedGroups.isNotEmpty ? mergedGroups.first : existing.group,
-            selectedLabels: mergedLabels,
-            modelName: existing.modelName ?? p.modelName,
-            ipAddress: existing.ipAddress ?? p.ipAddress,
-          );
-          debugPrint('Duplicate printer entry merged: ${p.identifier}');
-        }
+        uniqueById[p.id] = p;
       }
-      final printers = uniqueByIdentifier.values.toList();
-      debugPrint('Loaded ${printers.length} unique printers from localStorage');
+      final printers = uniqueById.values.toList();
+      debugPrint('Loaded ${printers.length} printers from localStorage');
       return printers;
     } catch (e) {
       debugPrint('Error loading saved printers: $e');
@@ -522,7 +468,7 @@ class PrinterService {
 
   // Update printer in localStorage
   static Future<void> updatePrinter(Printer printer) async {
-    await savePrinter(printer, mergeExistingAssignments: false);
+    await savePrinter(printer);
   }
 
   // Helper: Map interface type string to PrinterType enum

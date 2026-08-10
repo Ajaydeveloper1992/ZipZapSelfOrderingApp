@@ -242,7 +242,7 @@ class _ReceiptPreviewPageState extends State<ReceiptPreviewPage>
 
       if (!mounted) return;
       if (allSuccess) {
-        AppToast.success(
+        AppToast.printConfirmation(
           context: context,
           title: 'Print sent',
           description: 'Receipt image sent to printer successfully.',
@@ -323,19 +323,26 @@ class _ReceiptPreviewPageState extends State<ReceiptPreviewPage>
     orderNumber: '#1001',
     orderType: 'Pickup',
     customerName: 'Gautam',
+    cashier: 'Returning Customer [10 Orders]',
     phone: '8410862546',
     placedAt: DateTime.now(),
     requiredAt: DateTime.now().add(const Duration(minutes: 45)),
-    kitchenNote: 'Please add extra napkins',
+    orderNote: 'Please add extra napkins',
     items: const [
       ReceiptItem(
         id: '1',
         name: 'Shrimp Hot and Sour Soup',
         quantity: 1,
         variants: ['Size: Large', 'Spice Level: Spicy'],
-        notes: 'Item Note: Please add extra napkins',
+        notes: 'Please add extra napkins',
       ),
-      ReceiptItem(id: '2', name: 'Steam Momos - BOGO', quantity: 1),
+      ReceiptItem(
+        id: '2',
+        name: '2 Steam Momos - BOGO',
+        quantity: 1,
+        addons: ['Copy'],
+        notes: 'Please add extra napkins',
+      ),
     ],
   );
 }

@@ -14,6 +14,24 @@ final toastConfig = {
 
 /// A utility class for showing consistent toast notifications throughout the app
 class AppToast {
+  static const Duration printConfirmationDuration = Duration(
+    milliseconds: 500,
+  );
+
+  /// Show a short-lived print confirmation toast
+  static void printConfirmation({
+    required BuildContext context,
+    required String title,
+    required String description,
+  }) {
+    success(
+      context: context,
+      title: title,
+      description: description,
+      autoCloseDuration: printConfirmationDuration,
+    );
+  }
+
   /// Show a success toast
   static void success({
     required BuildContext context,

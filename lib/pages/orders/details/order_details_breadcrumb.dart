@@ -316,7 +316,7 @@ class _OrderDetailsBreadcrumbState extends State<OrderDetailsBreadcrumb> {
 
       if (mounted) {
         if (allSuccess) {
-          AppToast.success(
+          AppToast.printConfirmation(
             context: context,
             title: 'Receipt Printed',
             description: 'Customer receipt printed successfully',
