@@ -1514,7 +1514,7 @@ class _NewOrderPageState extends State<NewOrderPage> {
       final printers = await PrinterService.getSavedPrinters();
       final seenPrinterKeys = <String>{};
       final kitchenPrinters = printers
-          .where((p) => p.group == PrinterGroup.kitchen)
+          .where((p) => p.supportsGroup(PrinterGroup.kitchen))
           .where((p) => p.status != PrinterStatus.error)
           .where((p) => seenPrinterKeys.add('${p.type}:${p.identifier}'))
           .toList();
@@ -1711,7 +1711,7 @@ class _NewOrderPageState extends State<NewOrderPage> {
       final printers = await PrinterService.getSavedPrinters();
       final seenPrinterKeys = <String>{};
       final kitchenPrinters = printers
-          .where((p) => p.group == PrinterGroup.kitchen)
+          .where((p) => p.supportsGroup(PrinterGroup.kitchen))
           .where((p) => p.status != PrinterStatus.error)
           .where((p) => seenPrinterKeys.add('${p.type}:${p.identifier}'))
           .toList();
@@ -1886,7 +1886,7 @@ class _NewOrderPageState extends State<NewOrderPage> {
       // Get receipt printers (receipt group) only
       final printers = await PrinterService.getSavedPrinters();
       final receiptPrinters = printers
-          .where((p) => p.group == PrinterGroup.receipt)
+          .where((p) => p.supportsGroup(PrinterGroup.receipt))
           .where((p) => p.status != PrinterStatus.error)
           .toList();
 
@@ -1963,7 +1963,7 @@ class _NewOrderPageState extends State<NewOrderPage> {
       // Get quote printers (quote group) only
       final printers = await PrinterService.getSavedPrinters();
       final quotePrinters = printers
-          .where((p) => p.group == PrinterGroup.quote)
+          .where((p) => p.supportsGroup(PrinterGroup.quote))
           .where((p) => p.status != PrinterStatus.error)
           .toList();
 

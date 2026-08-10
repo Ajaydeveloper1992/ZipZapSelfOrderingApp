@@ -1144,7 +1144,7 @@ class _ReportsPageState extends State<ReportsPage> {
       // Get receipt printers (receipt group) only
       final printers = await PrinterService.getSavedPrinters();
       final receiptPrinters = printers
-          .where((p) => p.group == PrinterGroup.receipt)
+          .where((p) => p.supportsGroup(PrinterGroup.receipt))
           .where((p) => p.status != PrinterStatus.error)
           .toList();
 

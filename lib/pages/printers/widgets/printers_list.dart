@@ -64,7 +64,7 @@ class PrintersList extends StatelessWidget {
     return ListView(
       children: PrinterGroup.values.map((group) {
         final groupPrinters = testPrinters
-            .where((p) => p.group == group)
+            .where((p) => p.supportsGroup(group))
             .toList();
         return PrinterGroupSection(
           group: group,

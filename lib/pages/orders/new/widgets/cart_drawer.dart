@@ -1146,7 +1146,7 @@ class _CartDrawerState extends State<CartDrawer> {
 
       final printers = await PrinterService.getSavedPrinters();
       final kitchenPrinters = printers
-          .where((p) => p.group == PrinterGroup.kitchen)
+          .where((p) => p.supportsGroup(PrinterGroup.kitchen))
           .where((p) => p.status != PrinterStatus.error)
           .toList();
 

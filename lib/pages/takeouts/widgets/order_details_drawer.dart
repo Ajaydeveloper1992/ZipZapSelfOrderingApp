@@ -405,7 +405,7 @@ class _OrderDetailsDrawerState extends State<OrderDetailsDrawer> {
       final printers = await PrinterService.getSavedPrinters();
       final seenPrinterKeys = <String>{};
       final kitchenPrinters = printers
-          .where((p) => p.group == PrinterGroup.kitchen)
+          .where((p) => p.supportsGroup(PrinterGroup.kitchen))
           .where((p) => p.status != PrinterStatus.error)
           .where((p) => seenPrinterKeys.add('${p.type}:${p.identifier}'))
           .toList();
@@ -868,7 +868,7 @@ class _OrderDetailsDrawerState extends State<OrderDetailsDrawer> {
       // Get receipt printers (receipt group) only
       final printers = await PrinterService.getSavedPrinters();
       final receiptPrinters = printers
-          .where((p) => p.group == PrinterGroup.receipt)
+          .where((p) => p.supportsGroup(PrinterGroup.receipt))
           .where((p) => p.status != PrinterStatus.error)
           .toList();
 

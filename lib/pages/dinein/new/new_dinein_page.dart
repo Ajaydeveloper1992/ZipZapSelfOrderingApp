@@ -1590,7 +1590,7 @@ class _NewDineInPageState extends State<NewDineInPage> {
       final printers = await PrinterService.getSavedPrinters();
       final seenPrinterKeys = <String>{};
       final kitchenPrinters = printers
-          .where((p) => p.group == PrinterGroup.kitchen)
+          .where((p) => p.supportsGroup(PrinterGroup.kitchen))
           .where((p) => p.status != PrinterStatus.error)
           .where((p) => seenPrinterKeys.add('${p.type}:${p.identifier}'))
           .toList();
@@ -1788,7 +1788,7 @@ class _NewDineInPageState extends State<NewDineInPage> {
       final printers = await PrinterService.getSavedPrinters();
       final seenPrinterKeys = <String>{};
       final kitchenPrinters = printers
-          .where((p) => p.group == PrinterGroup.kitchen)
+          .where((p) => p.supportsGroup(PrinterGroup.kitchen))
           .where((p) => p.status != PrinterStatus.error)
           .where((p) => seenPrinterKeys.add('${p.type}:${p.identifier}'))
           .toList();
@@ -1961,7 +1961,7 @@ class _NewDineInPageState extends State<NewDineInPage> {
       // Get receipt printers (receipt group) only
       final printers = await PrinterService.getSavedPrinters();
       final receiptPrinters = printers
-          .where((p) => p.group == PrinterGroup.receipt)
+          .where((p) => p.supportsGroup(PrinterGroup.receipt))
           .where((p) => p.status != PrinterStatus.error)
           .toList();
 
@@ -2038,7 +2038,7 @@ class _NewDineInPageState extends State<NewDineInPage> {
       // Get quote printers (quote group) only
       final printers = await PrinterService.getSavedPrinters();
       final quotePrinters = printers
-          .where((p) => p.group == PrinterGroup.quote)
+          .where((p) => p.supportsGroup(PrinterGroup.quote))
           .where((p) => p.status != PrinterStatus.error)
           .toList();
 
@@ -2138,7 +2138,7 @@ class _NewDineInPageState extends State<NewDineInPage> {
       // Get receipt printers
       final printers = await PrinterService.getSavedPrinters();
       final receiptPrinters = printers
-          .where((p) => p.group == PrinterGroup.receipt)
+          .where((p) => p.supportsGroup(PrinterGroup.receipt))
           .where((p) => p.status != PrinterStatus.error)
           .toList();
 

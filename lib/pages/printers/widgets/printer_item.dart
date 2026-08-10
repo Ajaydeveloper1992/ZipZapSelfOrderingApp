@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:zipzap_pos_self_orders/models/printer_model.dart';
+import 'package:zipzap_pos_self_orders/pages/printers/widgets/printer_constants.dart';
 
 class PrinterItem extends StatefulWidget {
   final Printer printer;
@@ -208,6 +209,11 @@ class _PrinterItemState extends State<PrinterItem> {
                         context,
                         'Status',
                         _getStatusLabel(widget.printer.status),
+                      ),
+                      _buildInfoRow(
+                        context,
+                        'Assigned To',
+                        widget.printer.groups.map((g) => g.label).join(', '),
                       ),
                       if (widget.printer.selectedLabels.isNotEmpty) ...[
                         const SizedBox(height: 8),

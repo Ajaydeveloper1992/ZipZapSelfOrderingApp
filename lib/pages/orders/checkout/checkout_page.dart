@@ -1407,7 +1407,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
       }
 
       var drawerPrinters = availablePrinters
-          .where((p) => p.group == PrinterGroup.receipt)
+          .where((p) => p.supportsGroup(PrinterGroup.receipt))
           .toList();
 
       if (drawerPrinters.isEmpty) {
@@ -1454,7 +1454,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
       // Get receipt printers (receipt group) only
       final printers = await PrinterService.getSavedPrinters();
       final receiptPrinters = printers
-          .where((p) => p.group == PrinterGroup.receipt)
+          .where((p) => p.supportsGroup(PrinterGroup.receipt))
           .where((p) => p.status != PrinterStatus.error)
           .toList();
 
@@ -1539,7 +1539,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
       // Get receipt printers (receipt group) only
       final printers = await PrinterService.getSavedPrinters();
       final receiptPrinters = printers
-          .where((p) => p.group == PrinterGroup.receipt)
+          .where((p) => p.supportsGroup(PrinterGroup.receipt))
           .where((p) => p.status != PrinterStatus.error)
           .toList();
 

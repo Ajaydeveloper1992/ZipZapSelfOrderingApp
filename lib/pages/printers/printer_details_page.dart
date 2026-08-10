@@ -8,6 +8,7 @@ import 'package:zipzap_pos_self_orders/services/labels_service.dart';
 import 'package:zipzap_pos_self_orders/widgets/warning_dialog.dart';
 import 'package:uuid/uuid.dart';
 import 'package:zipzap_pos_self_orders/widgets/app_toast.dart';
+import 'package:zipzap_pos_self_orders/pages/printers/widgets/printer_constants.dart';
 
 class PrinterDetailsPage extends StatefulWidget {
   final AvailablePrinter? availablePrinter;
@@ -29,6 +30,7 @@ class _PrinterDetailsPageState extends State<PrinterDetailsPage> {
   late TextEditingController _nameController;
   late String _connectionInfo;
   late List<PrinterLabel> _labels;
+  late Set<PrinterGroup> _selectedGroups;
   bool _isLoadingLabels = true;
   String? _labelsError;
 
@@ -49,6 +51,8 @@ class _PrinterDetailsPageState extends State<PrinterDetailsPage> {
     } else {
       _connectionInfo = '';
     }
+    _selectedGroups =
+        widget.existingPrinter?.groups.toSet() ?? {widget.group};
     _nameController = TextEditingController(text: initialName);
     _loadLabels();
   }
@@ -133,6 +137,16 @@ class _PrinterDetailsPageState extends State<PrinterDetailsPage> {
     });
   }
 
+  void _handleGroupChanged(PrinterGroup group, bool value) {
+    setState(() {
+      if (value) {
+        _selectedGroups.add(group);
+      } else if (_selectedGroups.length > 1) {
+        _selectedGroups.remove(group);
+      }
+    });
+  }
+
   Future<void> _handlePrintTest() async {
     String? identifier;
     String? interfaceType;
@@ -200,12 +214,24 @@ class _PrinterDetailsPageState extends State<PrinterDetailsPage> {
         .where((l) => l.isSelected)
         .map((l) => l.id)
         .toList();
+    final selectedGroups = _selectedGroups.toList();
+
+    if (selectedGroups.isEmpty) {
+      AppToast.warning(
+        context: context,
+        title: 'Assignment Required',
+        description: 'Select at least one printer assignment',
+      );
+      return;
+    }
 
     try {
       if (_isEditing && widget.existingPrinter != null) {
         // Update existing printer
         final updatedPrinter = widget.existingPrinter!.copyWith(
           name: _nameController.text.trim(),
+          group: selectedGroups.first,
+          groups: selectedGroups,
           selectedLabels: selectedLabelIds,
         );
         await PrinterService.updatePrinter(updatedPrinter);
@@ -243,7 +269,8 @@ class _PrinterDetailsPageState extends State<PrinterDetailsPage> {
           name: _nameController.text.trim(),
           type: widget.availablePrinter!.type,
           status: PrinterStatus.online,
-          group: widget.group,
+          group: selectedGroups.first,
+          groups: selectedGroups,
           identifier: widget.availablePrinter!.id,
           selectedLabels: selectedLabelIds,
           modelName: modelName,
@@ -621,6 +648,51 @@ class _PrinterDetailsPageState extends State<PrinterDetailsPage> {
                 mainAxisAlignment: MainAxisAlignment.start,
                 children: [
                   const SizedBox(height: 8),
+                  Card(
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      side: BorderSide(
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.outline.withValues(alpha: 0.15),
+                      ),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+                            child: Text(
+                              'Assign To',
+                              style: Theme.of(context).textTheme.titleSmall
+                                  ?.copyWith(fontWeight: FontWeight.w700),
+                            ),
+                          ),
+                          ...PrinterGroup.values.map((group) {
+                            final selected = _selectedGroups.contains(group);
+                            return CheckboxListTile(
+                              dense: true,
+                              value: selected,
+                              onChanged:
+                                  selected && _selectedGroups.length == 1
+                                  ? null
+                                  : (value) => _handleGroupChanged(
+                                      group,
+                                      value ?? false,
+                                    ),
+                              title: Text(group.label),
+                              secondary: Icon(group.icon, size: 20),
+                              controlAffinity: ListTileControlAffinity.leading,
+                            );
+                          }),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
                   SizedBox(
                     width: double.infinity,
                     child: FilledButton(

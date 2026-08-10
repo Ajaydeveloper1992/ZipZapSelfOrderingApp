@@ -195,8 +195,8 @@ class _ReceiptPreviewPageState extends State<ReceiptPreviewPage>
       final printers = await PrinterService.getSavedPrinters();
       final printersToUse = printers.where((printer) {
         final isCorrectGroup = receiptType == ReceiptType.customer
-            ? printer.group == PrinterGroup.receipt
-            : printer.group == PrinterGroup.kitchen;
+            ? printer.supportsGroup(PrinterGroup.receipt)
+            : printer.supportsGroup(PrinterGroup.kitchen);
         return isCorrectGroup && printer.status != PrinterStatus.error;
       }).toList();
 

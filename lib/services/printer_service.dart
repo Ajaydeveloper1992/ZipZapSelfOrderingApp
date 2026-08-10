@@ -357,7 +357,10 @@ class PrinterService {
   }
 
   // Save printer to localStorage
-  static Future<void> savePrinter(Printer printer) async {
+  static Future<void> savePrinter(
+    Printer printer, {
+    bool mergeExistingAssignments = true,
+  }) async {
     try {
       final prefs = await SharedPreferences.getInstance();
       final printers = await getSavedPrinters();
@@ -368,6 +371,32 @@ class PrinterService {
 
       // Remove existing printer entries with same ID or same identifier
       // to avoid duplicate saved entries for the same physical printer.
+      Printer? existingPrinter;
+      for (final savedPrinter in printers) {
+        if (savedPrinter.id == printer.id ||
+            savedPrinter.identifier == printer.identifier) {
+          existingPrinter = savedPrinter;
+          break;
+        }
+      }
+      final mergedGroups = mergeExistingAssignments
+          ? {
+              ...?existingPrinter?.groups,
+              ...printer.groups,
+            }.toList()
+          : printer.groups;
+      final printerToSave = printer.copyWith(
+        id: existingPrinter?.id ?? printer.id,
+        groups: mergedGroups,
+        group: mergedGroups.isNotEmpty ? mergedGroups.first : printer.group,
+        selectedLabels: mergeExistingAssignments
+            ? (printer.selectedLabels.isNotEmpty
+                  ? printer.selectedLabels
+                  : existingPrinter?.selectedLabels)
+            : printer.selectedLabels,
+        modelName: printer.modelName ?? existingPrinter?.modelName,
+        ipAddress: printer.ipAddress ?? existingPrinter?.ipAddress,
+      );
       final removedCount = printers.length;
       printers.removeWhere(
         (p) => p.id == printer.id || p.identifier == printer.identifier,
@@ -376,7 +405,7 @@ class PrinterService {
         debugPrint('Removed existing printer with same id/identifier');
       }
 
-      printers.add(printer);
+      printers.add(printerToSave);
       debugPrint('After adding, printers count: ${printers.length}');
 
       final jsonList = printers.map((p) => _printerToJson(p)).toList();
@@ -431,7 +460,23 @@ class PrinterService {
         if (!uniqueByIdentifier.containsKey(p.identifier)) {
           uniqueByIdentifier[p.identifier] = p;
         } else {
-          debugPrint('Duplicate printer entry ignored: ${p.identifier}');
+          final existing = uniqueByIdentifier[p.identifier]!;
+          final mergedGroups = {
+            ...existing.groups,
+            ...p.groups,
+          }.toList();
+          final mergedLabels = {
+            ...existing.selectedLabels,
+            ...p.selectedLabels,
+          }.toList();
+          uniqueByIdentifier[p.identifier] = existing.copyWith(
+            groups: mergedGroups,
+            group: mergedGroups.isNotEmpty ? mergedGroups.first : existing.group,
+            selectedLabels: mergedLabels,
+            modelName: existing.modelName ?? p.modelName,
+            ipAddress: existing.ipAddress ?? p.ipAddress,
+          );
+          debugPrint('Duplicate printer entry merged: ${p.identifier}');
         }
       }
       final printers = uniqueByIdentifier.values.toList();
@@ -477,7 +522,7 @@ class PrinterService {
 
   // Update printer in localStorage
   static Future<void> updatePrinter(Printer printer) async {
-    await savePrinter(printer);
+    await savePrinter(printer, mergeExistingAssignments: false);
   }
 
   // Helper: Map interface type string to PrinterType enum
@@ -502,6 +547,7 @@ class PrinterService {
       'type': printer.type.toString().split('.').last,
       'status': printer.status.toString().split('.').last,
       'group': printer.group.toString().split('.').last,
+      'groups': printer.groups.map((g) => g.toString().split('.').last).toList(),
       'identifier': printer.identifier,
       'selectedLabels': printer.selectedLabels,
       'modelName': printer.modelName,
@@ -511,12 +557,21 @@ class PrinterService {
 
   // Helper: Create Printer from JSON
   static Printer _printerFromJson(Map<String, dynamic> json) {
+    final legacyGroup = _stringToPrinterGroup(json['group'] as String? ?? '');
+    final groups =
+        (json['groups'] as List<dynamic>?)
+            ?.map((e) => _stringToPrinterGroup(e.toString()))
+            .toSet()
+            .toList() ??
+        [legacyGroup];
+
     return Printer(
       id: json['id'] as String,
       name: json['name'] as String,
       type: _stringToPrinterType(json['type'] as String),
       status: _stringToPrinterStatus(json['status'] as String),
-      group: _stringToPrinterGroup(json['group'] as String),
+      group: groups.isNotEmpty ? groups.first : legacyGroup,
+      groups: groups.isNotEmpty ? groups : [legacyGroup],
       identifier: json['identifier'] as String? ?? json['id'] as String,
       selectedLabels:
           (json['selectedLabels'] as List<dynamic>?)
