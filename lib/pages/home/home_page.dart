@@ -351,7 +351,7 @@ class _HomePageState extends State<HomePage> {
 
   void _startHiddenSettingsTimer() {
     _hiddenSettingsTimer?.cancel();
-    _hiddenSettingsTimer = Timer(const Duration(seconds: 2), () {
+    _hiddenSettingsTimer = Timer(const Duration(seconds: 1), () {
       _hiddenSettingsTimer = null;
       _openHiddenSettingsIfAuthorized();
     });
