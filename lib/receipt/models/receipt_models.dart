@@ -65,6 +65,7 @@ class ReceiptModel {
   final String? customerName;
   final String? cashier;
   final String? tableNumber;
+  final int? partySize;
   final String? orderType;
   final DateTime placedAt;
   final DateTime? requiredAt;
@@ -85,6 +86,7 @@ class ReceiptModel {
     this.customerName,
     this.cashier,
     this.tableNumber,
+    this.partySize,
     this.orderType,
     required this.placedAt,
     this.requiredAt,

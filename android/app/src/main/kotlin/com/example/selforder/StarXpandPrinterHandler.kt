@@ -261,6 +261,9 @@ class StarXpandPrinterHandler(private val context: Context) : MethodChannel.Meth
             textSize = 34f
             typeface = Typeface.create("sans-serif-condensed", Typeface.BOLD)
         }
+        val invertedPaint = Paint(titlePaint).apply {
+            color = Color.WHITE
+        }
         val heroPaint = Paint(normalPaint).apply {
             textSize = 54f
             typeface = Typeface.create("sans-serif-condensed", Typeface.BOLD)
@@ -280,6 +283,7 @@ class StarXpandPrinterHandler(private val context: Context) : MethodChannel.Meth
             return line
                 .removePrefix("##").removeSuffix("##")
                 .removePrefix("@@").removeSuffix("@@")
+                .removePrefix("%%").removeSuffix("%%")
                 .removePrefix("!!").removeSuffix("!!")
                 .removePrefix("**").removeSuffix("**")
                 .removePrefix("//").removeSuffix("//")
@@ -289,6 +293,7 @@ class StarXpandPrinterHandler(private val context: Context) : MethodChannel.Meth
             return when {
                 line.startsWith("##") && line.endsWith("##") -> heroPaint
                 line.startsWith("@@") && line.endsWith("@@") -> titlePaint
+                line.startsWith("%%") && line.endsWith("%%") -> invertedPaint
                 line.startsWith("!!") && line.endsWith("!!") -> itemPaint
                 line.startsWith("**") && line.endsWith("**") -> boldPaint
                 line.startsWith("//") && line.endsWith("//") -> italicPaint
@@ -326,6 +331,10 @@ class StarXpandPrinterHandler(private val context: Context) : MethodChannel.Meth
             color = Color.rgb(150, 150, 150)
             strokeWidth = 2f
         }
+        val invertedBackgroundPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.BLACK
+            style = Paint.Style.FILL
+        }
 
         var y = verticalPadding.toFloat()
         for (line in lines) {
@@ -348,17 +357,29 @@ class StarXpandPrinterHandler(private val context: Context) : MethodChannel.Meth
 
             val paint = paintForLine(line)
             val printableLine = cleanLine(line)
+            val inverted = line.startsWith("%%") && line.endsWith("%%")
             val centered = (line.startsWith("##") && line.endsWith("##")) ||
-                (line.startsWith("@@") && line.endsWith("@@"))
+                (line.startsWith("@@") && line.endsWith("@@")) ||
+                inverted
             val x = if (centered) {
                 ((printableRasterWidthPx - paint.measureText(printableLine)) / 2f)
                     .coerceAtLeast(horizontalPadding)
             } else {
                 horizontalPadding
             }
-            y += -paint.fontMetrics.ascent
+            val lineHeight = paint.fontMetrics.descent - paint.fontMetrics.ascent + 10f
+            if (inverted) {
+                canvas.drawRect(
+                    horizontalPadding,
+                    y + 2f,
+                    printableRasterWidthPx - horizontalPadding,
+                    y + lineHeight - 2f,
+                    invertedBackgroundPaint
+                )
+            }
+            y += -paint.fontMetrics.ascent + 5f
             canvas.drawText(printableLine, x, y, paint)
-            y += paint.fontMetrics.descent + 10f
+            y += paint.fontMetrics.descent + 5f
         }
 
         return bitmap
@@ -1831,6 +1852,12 @@ class StarXpandPrinterHandler(private val context: Context) : MethodChannel.Meth
         }
     }
 
+    private fun appendInvertedCenteredWrapped(builder: StringBuilder, text: String) {
+        for (line in wrapReceiptLines(text, receiptTextColumns)) {
+            builder.append("%%").append(receiptCenter(line)).append("%%\n")
+        }
+    }
+
     private fun appendReceiptPriceRow(
         builder: StringBuilder,
         left: String,
@@ -1926,6 +1953,9 @@ class StarXpandPrinterHandler(private val context: Context) : MethodChannel.Meth
         val orderType = (orderData["orderType"] as? String) ?: "PICKUP"
         val placedAt = (orderData["placedAt"] as? String) ?: orderDate
         val dueAt = (orderData["dueAt"] as? String) ?: ""
+        val floorPlanName = (orderData["floorPlanName"] as? String) ?: ""
+        val tableName = (orderData["tableName"] as? String) ?: ""
+        val partySize = (orderData["partySize"] as? Number)?.toInt() ?: 0
 
         return buildString {
             append(receiptBorderMarker).append('\n')
@@ -1936,7 +1966,14 @@ class StarXpandPrinterHandler(private val context: Context) : MethodChannel.Meth
             } else {
                 "Order #$orderNumber"
             }
-            append("@@").append(orderLine).append("@@\n")
+            appendInvertedCenteredWrapped(this, orderLine)
+            val tableLine = "$floorPlanName $tableName".trim()
+            if (tableLine.isNotEmpty()) {
+                append("**").append(receiptCenter(tableLine)).append("**\n")
+            }
+            if (partySize > 0) {
+                append(receiptCenter("Party of $partySize")).append('\n')
+            }
             if (isReturningCustomer) {
                 val orderLabel = if (customerOrderCount == 1) "Order" else "Orders"
                 val returningLine = if (customerOrderCount > 0) {
@@ -1950,27 +1987,20 @@ class StarXpandPrinterHandler(private val context: Context) : MethodChannel.Meth
             append('\n')
             append("__RULE__\n")
             if (note.isNotEmpty()) {
-                appendWrapped(this, "Order Note: $note", italic = true)
+                appendInvertedCenteredWrapped(this, "Order Note: $note")
                 append("__RULE__\n")
             }
             appendKitchenItemsText(this, items)
             append("__RULE__\n")
             append('\n')
-            if (placedAt.isNotEmpty()) append("@@Placed at: ").append(placedAt).append("@@\n")
-            if (dueAt.isNotEmpty()) append("@@Due at: ").append(dueAt).append("@@\n")
+            if (placedAt.isNotEmpty()) append(receiptCenter("Placed at: $placedAt")).append('\n')
+            if (dueAt.isNotEmpty()) append(receiptCenter("Due at: $dueAt")).append('\n')
         }
     }
 
     private fun buildDineInKitchenReceiptText(orderData: Map<*, *>): String {
         val base = StringBuilder()
-        val floorPlanName = (orderData["floorPlanName"] as? String) ?: ""
-        val tableName = (orderData["tableName"] as? String) ?: ""
-        val partySize = (orderData["partySize"] as? Number)?.toInt() ?: 0
         base.append(receiptBorderMarker).append('\n')
-        if (floorPlanName.isNotEmpty() || tableName.isNotEmpty()) {
-            base.append("**").append(receiptCenter("$floorPlanName $tableName".trim())).append("**\n")
-        }
-        if (partySize > 0) base.append(receiptCenter("Party of $partySize")).append('\n')
         base.append(buildKitchenReceiptText(orderData).removePrefix(receiptBorderMarker).trimStart('\n'))
         return base.toString()
     }

@@ -72,17 +72,27 @@ class KitchenReceipt extends StatelessWidget {
           ),
         ],
         const SizedBox(height: 12),
-        Text(
-          _customerOrderLine,
-          textAlign: TextAlign.center,
-          style: const TextStyle(
-            fontFamily: _receiptFont,
-            fontSize: 24,
-            fontWeight: FontWeight.w900,
-            color: Colors.black,
-            height: 1.15,
-          ),
+        _InvertedKitchenLine(
+          text: _customerOrderLine,
+          fontSize: 34,
+          fontWeight: FontWeight.w900,
         ),
+        if (_tablePartyLines.isNotEmpty) ...[
+          const SizedBox(height: 10),
+          ..._tablePartyLines.map(
+            (line) => Text(
+              line.text,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontFamily: _receiptFont,
+                fontSize: 24,
+                fontWeight: line.bold ? FontWeight.w900 : FontWeight.normal,
+                color: Colors.black,
+                height: 1.2,
+              ),
+            ),
+          ),
+        ],
         if (_returningCustomerLine.isNotEmpty) ...[
           const SizedBox(height: 10),
           Text(
@@ -116,15 +126,10 @@ class KitchenReceipt extends StatelessWidget {
   }
 
   Widget _buildOrderNote(BuildContext context, String note) {
-    return Text(
-      'Order Note: $note',
-      style: const TextStyle(
-        fontFamily: _receiptFont,
-        fontSize: 24,
-        fontStyle: FontStyle.italic,
-        color: Colors.black,
-        height: 1.25,
-      ),
+    return _InvertedKitchenLine(
+      text: 'Order Note: $note',
+      fontSize: 26,
+      fontWeight: FontWeight.w900,
     );
   }
 
@@ -251,15 +256,12 @@ class KitchenReceipt extends StatelessWidget {
       text: TextSpan(
         style: const TextStyle(
           fontFamily: _receiptFont,
-          fontSize: 22,
+          fontSize: 24,
           color: Colors.black,
           height: 1.2,
         ),
         children: [
-          TextSpan(
-            text: '$label ',
-            style: const TextStyle(fontWeight: FontWeight.w900),
-          ),
+          TextSpan(text: '$label '),
           TextSpan(text: value),
         ],
       ),
@@ -270,10 +272,21 @@ class KitchenReceipt extends StatelessWidget {
 
   String get _customerOrderLine {
     final customerName = model.customerName?.trim() ?? '';
+    if (customerName.isEmpty) return 'Order #${model.orderNumber}';
+    return '$customerName - ${model.orderNumber}';
+  }
+
+  List<({bool bold, String text})> get _tablePartyLines {
+    final lines = <({bool bold, String text})>[];
     final tableNumber = model.tableNumber?.trim() ?? '';
-    final identity = customerName.isNotEmpty ? customerName : tableNumber;
-    if (identity.isEmpty) return 'Order #${model.orderNumber}';
-    return '$identity - ${model.orderNumber}';
+    if (tableNumber.isNotEmpty) {
+      lines.add((bold: true, text: tableNumber));
+    }
+    final partySize = model.partySize;
+    if (partySize != null && partySize > 0) {
+      lines.add((bold: false, text: 'Party of $partySize'));
+    }
+    return lines;
   }
 
   String get _returningCustomerLine {
@@ -326,6 +339,38 @@ class _KitchenRule extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(height: thickness, color: Colors.black38);
+  }
+}
+
+class _InvertedKitchenLine extends StatelessWidget {
+  final String text;
+  final double fontSize;
+  final FontWeight fontWeight;
+
+  const _InvertedKitchenLine({
+    required this.text,
+    required this.fontSize,
+    required this.fontWeight,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      color: Colors.black,
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+      child: Text(
+        text,
+        textAlign: TextAlign.center,
+        style: TextStyle(
+          fontFamily: KitchenReceipt._receiptFont,
+          fontSize: fontSize,
+          fontWeight: fontWeight,
+          color: Colors.white,
+          height: 1.05,
+        ),
+      ),
+    );
   }
 }
 
