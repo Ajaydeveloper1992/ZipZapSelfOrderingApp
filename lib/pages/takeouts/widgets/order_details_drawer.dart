@@ -512,6 +512,17 @@ class _OrderDetailsDrawerState extends State<OrderDetailsDrawer> {
 
     // Resolve modifier names from store cache when empty (e.g. order from WebSocket with IDs only)
     final storeModifiers = _dataProvider.modifiersList;
+    final storeModifierGroups = _dataProvider.modifierGroupsList;
+
+    String modifierGroupName(String modifierId) {
+      if (modifierId.isEmpty) return '';
+      final resolved = storeModifiers.where((m) => m.id == modifierId);
+      if (resolved.isEmpty) return '';
+      final groupId = resolved.first.modifierGroupId;
+      if (groupId == null || groupId.isEmpty) return '';
+      final groups = storeModifierGroups.where((g) => g.id == groupId);
+      return groups.isNotEmpty ? groups.first.name : '';
+    }
 
     // Format items with modifiers
     final itemsSource = orderItems ?? widget.order.items;
@@ -529,7 +540,7 @@ class _OrderDetailsDrawerState extends State<OrderDetailsDrawer> {
           'name': name,
           'priceAdjustment':
               0.0, // Modifiers in OrderItem don't have priceAdjustment
-          'group': '', // Modifiers in OrderItem don't have group info
+          'group': modifierGroupName(mod.id),
         };
       }).toList();
 

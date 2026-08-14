@@ -213,10 +213,21 @@ class CustomerReceipt extends StatelessWidget {
         ],
         if (item.notes != null && item.notes!.isNotEmpty) ...[
           const SizedBox(height: 8),
-          ReceiptNoteBox(item.notes!),
+          ReceiptNoteBox(_itemNoteText(item.notes!)),
         ],
       ],
     );
+  }
+
+  String _itemNoteText(String note) {
+    final trimmed = note.trim();
+    if (trimmed.toLowerCase().startsWith('order note:')) {
+      return 'Item Note: ${trimmed.substring('order note:'.length).trim()}';
+    }
+    if (trimmed.toLowerCase().startsWith('item note:')) {
+      return 'Item Note: ${trimmed.substring('item note:'.length).trim()}';
+    }
+    return 'Item Note: $trimmed';
   }
 
   Widget _buildSummary(BuildContext context) {

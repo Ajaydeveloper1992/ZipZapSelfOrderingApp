@@ -23,12 +23,6 @@ class KitchenReceipt extends StatelessWidget {
               _buildHeader(context),
               const SizedBox(height: 22),
               const _KitchenRule(thickness: 3),
-              if (_orderNote.isNotEmpty) ...[
-                const SizedBox(height: 18),
-                _buildOrderNote(context, _orderNote),
-                const SizedBox(height: 18),
-                const _KitchenRule(thickness: 2),
-              ],
               const SizedBox(height: 22),
               _buildItems(context),
               const SizedBox(height: 20),
@@ -58,37 +52,40 @@ class KitchenReceipt extends StatelessWidget {
           ),
         ),
         if (model.orderType != null) ...[
-          const SizedBox(height: 14),
+          const SizedBox(height: 10),
           Text(
             model.orderType!.toUpperCase(),
             textAlign: TextAlign.center,
             style: const TextStyle(
               fontFamily: _receiptFont,
-              fontSize: 25,
+              fontSize: 28,
               fontWeight: FontWeight.w900,
               color: Colors.black,
-              height: 1.1,
+              height: 1.05,
             ),
           ),
         ],
         const SizedBox(height: 12),
-        _InvertedKitchenLine(
-          text: _customerOrderLine,
-          fontSize: 34,
-          fontWeight: FontWeight.w900,
+        Text(
+          _customerOrderLine,
+          textAlign: TextAlign.center,
+          style: const TextStyle(
+            fontFamily: _receiptFont,
+            fontSize: 34,
+            fontWeight: FontWeight.w900,
+            color: Colors.black,
+            height: 1.05,
+          ),
         ),
         if (_tablePartyLines.isNotEmpty) ...[
           const SizedBox(height: 10),
           ..._tablePartyLines.map(
-            (line) => Text(
-              line.text,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontFamily: _receiptFont,
+            (line) => Padding(
+              padding: const EdgeInsets.only(bottom: 4),
+              child: _InvertedKitchenLine(
+                text: line.text,
                 fontSize: 24,
-                fontWeight: line.bold ? FontWeight.w900 : FontWeight.normal,
-                color: Colors.black,
-                height: 1.2,
+                fontWeight: line.bold ? FontWeight.w900 : FontWeight.w800,
               ),
             ),
           ),
@@ -126,10 +123,23 @@ class KitchenReceipt extends StatelessWidget {
   }
 
   Widget _buildOrderNote(BuildContext context, String note) {
-    return _InvertedKitchenLine(
-      text: 'Order Note: $note',
-      fontSize: 26,
-      fontWeight: FontWeight.w900,
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        border: Border.all(color: Colors.black, width: 1.5),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+      child: Text(
+        'Order Note: $note',
+        textAlign: TextAlign.center,
+        style: const TextStyle(
+          fontFamily: _receiptFont,
+          fontSize: 24,
+          fontWeight: FontWeight.w700,
+          color: Colors.black,
+          height: 1.2,
+        ),
+      ),
     );
   }
 
@@ -169,15 +179,10 @@ class KitchenReceipt extends StatelessWidget {
         ],
         if (item.notes != null && item.notes!.isNotEmpty) ...[
           const SizedBox(height: 12),
-          Text(
-            _noteText(item.notes!),
-            style: const TextStyle(
-              fontFamily: _receiptFont,
-              fontSize: 22,
-              fontStyle: FontStyle.italic,
-              color: Colors.black,
-              height: 1.25,
-            ),
+          _InvertedKitchenLine(
+            text: _noteText(item.notes!),
+            fontSize: 28,
+            fontWeight: FontWeight.w900,
           ),
         ],
       ],
@@ -204,7 +209,7 @@ class KitchenReceipt extends StatelessWidget {
                   '\u2022 ',
                   style: TextStyle(
                     fontFamily: _receiptFont,
-                    fontSize: 24,
+                    fontSize: 28,
                     fontWeight: FontWeight.w800,
                     color: Colors.black,
                     height: 1.2,
@@ -215,7 +220,8 @@ class KitchenReceipt extends StatelessWidget {
                     text: TextSpan(
                       style: const TextStyle(
                         fontFamily: _receiptFont,
-                        fontSize: 24,
+                        fontSize: 28,
+                        fontWeight: FontWeight.w800,
                         color: Colors.black,
                         height: 1.2,
                       ),
@@ -241,6 +247,10 @@ class KitchenReceipt extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
+        if (_orderNote.isNotEmpty) ...[
+          _buildOrderNote(context, _orderNote),
+          const SizedBox(height: 14),
+        ],
         _footerLine('Placed at:', _formatDate(model.placedAt)),
         if (model.requiredAt != null) ...[
           const SizedBox(height: 6),
@@ -297,11 +307,13 @@ class KitchenReceipt extends StatelessWidget {
 
   String _noteText(String note) {
     final trimmed = note.trim();
-    if (trimmed.toLowerCase().startsWith('order note:')) return trimmed;
-    if (trimmed.toLowerCase().startsWith('item note:')) {
-      return 'Order Note: ${trimmed.substring('item note:'.length).trim()}';
+    if (trimmed.toLowerCase().startsWith('order note:')) {
+      return 'Item Note: ${trimmed.substring('order note:'.length).trim()}';
     }
-    return 'Order Note: $trimmed';
+    if (trimmed.toLowerCase().startsWith('item note:')) {
+      return 'Item Note: ${trimmed.substring('item note:'.length).trim()}';
+    }
+    return 'Item Note: $trimmed';
   }
 
   (String, String) _splitModifier(String detail) {

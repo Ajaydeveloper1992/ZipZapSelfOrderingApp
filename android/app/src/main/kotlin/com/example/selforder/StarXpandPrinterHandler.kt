@@ -264,6 +264,11 @@ class StarXpandPrinterHandler(private val context: Context) : MethodChannel.Meth
         val invertedPaint = Paint(titlePaint).apply {
             color = Color.WHITE
         }
+        val modifierPaint = Paint(normalPaint).apply {
+            textSize = 30f
+            typeface = Typeface.create("sans-serif-condensed", Typeface.BOLD)
+            color = Color.BLACK
+        }
         val heroPaint = Paint(normalPaint).apply {
             textSize = 54f
             typeface = Typeface.create("sans-serif-condensed", Typeface.BOLD)
@@ -283,8 +288,11 @@ class StarXpandPrinterHandler(private val context: Context) : MethodChannel.Meth
             return line
                 .removePrefix("##").removeSuffix("##")
                 .removePrefix("@@").removeSuffix("@@")
+                .removePrefix("&&").removeSuffix("&&")
+                .removePrefix("{{").removeSuffix("}}")
                 .removePrefix("%%").removeSuffix("%%")
                 .removePrefix("!!").removeSuffix("!!")
+                .removePrefix("++").removeSuffix("++")
                 .removePrefix("**").removeSuffix("**")
                 .removePrefix("//").removeSuffix("//")
         }
@@ -293,22 +301,105 @@ class StarXpandPrinterHandler(private val context: Context) : MethodChannel.Meth
             return when {
                 line.startsWith("##") && line.endsWith("##") -> heroPaint
                 line.startsWith("@@") && line.endsWith("@@") -> titlePaint
+                line.startsWith("&&") && line.endsWith("&&") -> normalPaint
+                line.startsWith("{{") && line.endsWith("}}") -> normalPaint
                 line.startsWith("%%") && line.endsWith("%%") -> invertedPaint
                 line.startsWith("!!") && line.endsWith("!!") -> itemPaint
+                line.startsWith("++") && line.endsWith("++") -> modifierPaint
                 line.startsWith("**") && line.endsWith("**") -> boldPaint
                 line.startsWith("//") && line.endsWith("//") -> italicPaint
                 else -> normalPaint
             }
         }
 
+        fun markerPair(line: String): Pair<String, String> {
+            return when {
+                line.startsWith("##") && line.endsWith("##") -> "##" to "##"
+                line.startsWith("@@") && line.endsWith("@@") -> "@@" to "@@"
+                line.startsWith("&&") && line.endsWith("&&") -> "&&" to "&&"
+                line.startsWith("{{") && line.endsWith("}}") -> "{{" to "}}"
+                line.startsWith("%%") && line.endsWith("%%") -> "%%" to "%%"
+                line.startsWith("!!") && line.endsWith("!!") -> "!!" to "!!"
+                line.startsWith("++") && line.endsWith("++") -> "++" to "++"
+                line.startsWith("**") && line.endsWith("**") -> "**" to "**"
+                line.startsWith("//") && line.endsWith("//") -> "//" to "//"
+                else -> "" to ""
+            }
+        }
+
+        fun wrapMarkedLine(line: String): List<String> {
+            if (line == "__RULE__" || line == "__DOT__" || line.isBlank()) return listOf(line)
+            val paint = paintForLine(line)
+            val (prefix, suffix) = markerPair(line)
+            val printable = cleanLine(line).trim()
+            val maxWidth = printableRasterWidthPx - horizontalPadding * 2
+            if (paint.measureText(printable) <= maxWidth) return listOf(line)
+
+            val words = printable.split(Regex("\\s+")).filter { it.isNotEmpty() }
+            val wrapped = mutableListOf<String>()
+            var current = ""
+
+            fun addWrappedText(value: String) {
+                if (value.isNotEmpty()) wrapped.add(prefix + value + suffix)
+            }
+
+            for (word in words) {
+                val candidate = if (current.isEmpty()) word else "$current $word"
+                if (paint.measureText(candidate) <= maxWidth) {
+                    current = candidate
+                    continue
+                }
+                addWrappedText(current)
+                current = ""
+
+                if (paint.measureText(word) <= maxWidth) {
+                    current = word
+                } else {
+                    var chunk = ""
+                    for (char in word) {
+                        val next = chunk + char
+                        if (paint.measureText(next) <= maxWidth || chunk.isEmpty()) {
+                            chunk = next
+                        } else {
+                            addWrappedText(chunk)
+                            chunk = char.toString()
+                        }
+                    }
+                    current = chunk
+                }
+            }
+            addWrappedText(current)
+            return if (wrapped.isEmpty()) listOf(line) else wrapped
+        }
+
         fun lineHeight(line: String): Int {
             if (line == "__RULE__") return 18
             if (line == "__DOT__") return 14
             val metrics = paintForLine(line).fontMetrics
-            return (metrics.descent - metrics.ascent + 10).toInt()
+            val extraBoxPadding = if (line.startsWith("{{") && line.endsWith("}}")) 12 else 0
+            return (metrics.descent - metrics.ascent + 10 + extraBoxPadding).toInt()
         }
 
-        val bitmapHeight = (lines.sumOf { lineHeight(it) } + verticalPadding * 2)
+        val renderedLines = lines.flatMap { wrapMarkedLine(it) }
+        val unmarkedBlockLeft = if (hasBorder) {
+            horizontalPadding
+        } else {
+            val blockWidth = renderedLines
+                .filter { line ->
+                    line.isNotBlank() &&
+                        line != "__RULE__" &&
+                        line != "__DOT__" &&
+                        markerPair(line).first.isEmpty()
+                }
+                .maxOfOrNull { line -> paintForLine(line).measureText(cleanLine(line)) }
+                ?: 0f
+            if (blockWidth > 0f) {
+                ((printableRasterWidthPx - blockWidth) / 2f).coerceAtLeast(horizontalPadding)
+            } else {
+                horizontalPadding
+            }
+        }
+        val bitmapHeight = (renderedLines.sumOf { lineHeight(it) } + verticalPadding * 2)
             .coerceAtLeast(lineHeight("") + verticalPadding * 2)
         val bitmap = Bitmap.createBitmap(printableRasterWidthPx, bitmapHeight, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)
@@ -335,13 +426,21 @@ class StarXpandPrinterHandler(private val context: Context) : MethodChannel.Meth
             color = Color.BLACK
             style = Paint.Style.FILL
         }
+        val noteBorderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.BLACK
+            style = Paint.Style.STROKE
+            strokeWidth = 2f
+        }
 
         var y = verticalPadding.toFloat()
-        for (line in lines) {
+        var lineIndex = 0
+        while (lineIndex < renderedLines.size) {
+            val line = renderedLines[lineIndex]
             if (line == "__RULE__") {
                 y += 8f
                 canvas.drawLine(horizontalPadding, y, printableRasterWidthPx - horizontalPadding, y, rulePaint)
                 y += 10f
+                lineIndex++
                 continue
             }
             if (line == "__DOT__") {
@@ -352,6 +451,39 @@ class StarXpandPrinterHandler(private val context: Context) : MethodChannel.Meth
                     x += 12f
                 }
                 y += 8f
+                lineIndex++
+                continue
+            }
+            if (line.startsWith("{{") && line.endsWith("}}")) {
+                val boxLines = mutableListOf<String>()
+                while (lineIndex < renderedLines.size) {
+                    val boxedLine = renderedLines[lineIndex]
+                    if (!boxedLine.startsWith("{{") || !boxedLine.endsWith("}}")) break
+                    boxLines.add(cleanLine(boxedLine))
+                    lineIndex++
+                }
+
+                val paint = normalPaint
+                val textLineHeight = paint.fontMetrics.descent - paint.fontMetrics.ascent + 10f
+                val top = y + 4f
+                val bottom = top + (boxLines.size * textLineHeight) + 12f
+                canvas.drawRect(
+                    horizontalPadding,
+                    top,
+                    printableRasterWidthPx - horizontalPadding,
+                    bottom,
+                    noteBorderPaint
+                )
+
+                var textY = top + 6f
+                for (boxedText in boxLines) {
+                    textY += -paint.fontMetrics.ascent + 5f
+                    val x = ((printableRasterWidthPx - paint.measureText(boxedText)) / 2f)
+                        .coerceAtLeast(horizontalPadding + 6f)
+                    canvas.drawText(boxedText, x, textY, paint)
+                    textY += paint.fontMetrics.descent + 5f
+                }
+                y = bottom + 8f
                 continue
             }
 
@@ -360,12 +492,14 @@ class StarXpandPrinterHandler(private val context: Context) : MethodChannel.Meth
             val inverted = line.startsWith("%%") && line.endsWith("%%")
             val centered = (line.startsWith("##") && line.endsWith("##")) ||
                 (line.startsWith("@@") && line.endsWith("@@")) ||
+                (line.startsWith("&&") && line.endsWith("&&")) ||
+                (line.startsWith("{{") && line.endsWith("}}")) ||
                 inverted
             val x = if (centered) {
                 ((printableRasterWidthPx - paint.measureText(printableLine)) / 2f)
                     .coerceAtLeast(horizontalPadding)
             } else {
-                horizontalPadding
+                unmarkedBlockLeft
             }
             val lineHeight = paint.fontMetrics.descent - paint.fontMetrics.ascent + 10f
             if (inverted) {
@@ -380,6 +514,7 @@ class StarXpandPrinterHandler(private val context: Context) : MethodChannel.Meth
             y += -paint.fontMetrics.ascent + 5f
             canvas.drawText(printableLine, x, y, paint)
             y += paint.fontMetrics.descent + 5f
+            lineIndex++
         }
 
         return bitmap
@@ -874,7 +1009,10 @@ class StarXpandPrinterHandler(private val context: Context) : MethodChannel.Meth
             }
 
             if (itemNote.isNotEmpty()) {
-                printerBuilder.actionPrintText("• $itemNote\n")
+                val normalizedNote = normalizeItemNote(itemNote)
+                if (normalizedNote.isNotEmpty()) {
+                    printerBuilder.actionPrintText("• Item Note: $normalizedNote\n")
+                }
             }
             printerBuilder.actionFeedLine(1)
         }
@@ -1047,8 +1185,11 @@ class StarXpandPrinterHandler(private val context: Context) : MethodChannel.Meth
             }
 
             if (itemNote.isNotEmpty()) {
-                printerBuilder
-                    .actionPrintText("Order Note: ${itemNote.removePrefix("Item Note:").trim()}\n")
+                val normalizedNote = normalizeItemNote(itemNote)
+                if (normalizedNote.isNotEmpty()) {
+                    printerBuilder
+                        .actionPrintText("Item Note: $normalizedNote\n")
+                }
             }
 
             if (index != items.lastIndex) {
@@ -1795,7 +1936,36 @@ class StarXpandPrinterHandler(private val context: Context) : MethodChannel.Meth
         val group = (modifier["group"] as? String)?.trim().orEmpty()
         val name = (modifier["name"] as? String)?.trim().orEmpty()
         if (name.isEmpty()) return ""
-        return if (group.isNotEmpty() && !name.contains(":")) "$group: $name" else name
+        val genericGroup = group.equals("modifier", ignoreCase = true) ||
+            group.equals("modifiers", ignoreCase = true)
+        return if (!genericGroup && group.isNotEmpty() && !name.contains(":")) "$group: $name" else name
+    }
+
+    private fun formatModifierForCustomer(modifier: Map<*, *>): String {
+        val group = (modifier["group"] as? String)?.trim().orEmpty()
+        val name = (modifier["name"] as? String)?.trim().orEmpty()
+        if (name.isEmpty()) return ""
+        val priceAdjustment = (modifier["priceAdjustment"] as? Number)?.toDouble() ?: 0.0
+        val genericGroup = group.equals("modifier", ignoreCase = true) ||
+            group.equals("modifiers", ignoreCase = true)
+        val label = if (!genericGroup && group.isNotEmpty() && !name.contains(":")) {
+            "$group: $name"
+        } else {
+            name
+        }
+        if (priceAdjustment == 0.0) return label
+        val sign = if (priceAdjustment > 0) "+" else "-"
+        return "$label ($sign${money(kotlin.math.abs(priceAdjustment))})"
+    }
+
+    private fun normalizeItemNote(note: String): String {
+        val trimmed = note.trim()
+        val lower = trimmed.lowercase()
+        return when {
+            lower.startsWith("item note:") -> trimmed.substringAfter(':').trim()
+            lower.startsWith("order note:") -> trimmed.substringAfter(':').trim()
+            else -> trimmed
+        }
     }
 
     private fun appendWrapped(
@@ -1852,9 +2022,21 @@ class StarXpandPrinterHandler(private val context: Context) : MethodChannel.Meth
         }
     }
 
+    private fun appendCenteredRasterWrapped(builder: StringBuilder, text: String) {
+        for (line in wrapReceiptLines(text, receiptTextColumns)) {
+            builder.append("&&").append(line).append("&&\n")
+        }
+    }
+
+    private fun appendBorderedCenteredWrapped(builder: StringBuilder, text: String) {
+        for (line in wrapReceiptLines(text, receiptTextColumns - 4)) {
+            builder.append("{{").append(line).append("}}\n")
+        }
+    }
+
     private fun appendInvertedCenteredWrapped(builder: StringBuilder, text: String) {
         for (line in wrapReceiptLines(text, receiptTextColumns)) {
-            builder.append("%%").append(receiptCenter(line)).append("%%\n")
+            builder.append("%%").append(line).append("%%\n")
         }
     }
 
@@ -1922,11 +2104,16 @@ class StarXpandPrinterHandler(private val context: Context) : MethodChannel.Meth
                 val modifiers = (itemMap["modifiers"] as? List<*>) ?: emptyList<Any>()
                 for (modifier in modifiers) {
                     val modMap = modifier as? Map<*, *> ?: continue
-                    val modName = formatModifierForKitchen(modMap)
+                    val modName = formatModifierForCustomer(modMap)
                     if (modName.isNotEmpty()) appendWrapped(this, modName, "  ")
                 }
                 val itemNote = (itemMap["itemNote"] as? String) ?: ""
-                if (itemNote.isNotEmpty()) appendWrapped(this, itemNote, "  ")
+                if (itemNote.isNotEmpty()) {
+                    val normalizedNote = normalizeItemNote(itemNote)
+                    if (normalizedNote.isNotEmpty()) {
+                        appendWrapped(this, "Item Note: $normalizedNote", "  ")
+                    }
+                }
                 append('\n')
             }
             append(receiptDivider()).append('\n')
@@ -1960,19 +2147,19 @@ class StarXpandPrinterHandler(private val context: Context) : MethodChannel.Meth
         return buildString {
             append(receiptBorderMarker).append('\n')
             append("##").append(storeName).append("##\n")
-            append("@@").append(orderType.uppercase()).append("@@\n")
+            appendCenteredRasterWrapped(this, orderType.uppercase())
             val orderLine = if (customerName.isNotEmpty()) {
                 "$customerName - $orderNumber"
             } else {
                 "Order #$orderNumber"
             }
-            appendInvertedCenteredWrapped(this, orderLine)
+            append("@@").append(orderLine).append("@@\n")
             val tableLine = "$floorPlanName $tableName".trim()
             if (tableLine.isNotEmpty()) {
-                append("**").append(receiptCenter(tableLine)).append("**\n")
+                appendInvertedCenteredWrapped(this, tableLine)
             }
             if (partySize > 0) {
-                append(receiptCenter("Party of $partySize")).append('\n')
+                appendInvertedCenteredWrapped(this, "Party of $partySize")
             }
             if (isReturningCustomer) {
                 val orderLabel = if (customerOrderCount == 1) "Order" else "Orders"
@@ -1986,15 +2173,16 @@ class StarXpandPrinterHandler(private val context: Context) : MethodChannel.Meth
             if (customerPhone.isNotEmpty()) append("@@Phone: ").append(customerPhone).append("@@\n")
             append('\n')
             append("__RULE__\n")
-            if (note.isNotEmpty()) {
-                appendInvertedCenteredWrapped(this, "Order Note: $note")
-                append("__RULE__\n")
-            }
             appendKitchenItemsText(this, items)
             append("__RULE__\n")
+            if (note.isNotEmpty()) {
+                append('\n')
+                appendBorderedCenteredWrapped(this, "Order Note: $note")
+                append("__RULE__\n")
+            }
             append('\n')
-            if (placedAt.isNotEmpty()) append(receiptCenter("Placed at: $placedAt")).append('\n')
-            if (dueAt.isNotEmpty()) append(receiptCenter("Due at: $dueAt")).append('\n')
+            if (placedAt.isNotEmpty()) appendCenteredRasterWrapped(this, "Placed at: $placedAt")
+            if (dueAt.isNotEmpty()) appendCenteredRasterWrapped(this, "Due at: $dueAt")
         }
     }
 
@@ -2015,12 +2203,14 @@ class StarXpandPrinterHandler(private val context: Context) : MethodChannel.Meth
             for (modifier in modifiers) {
                 val modMap = modifier as? Map<*, *> ?: continue
                 val modName = formatModifierForKitchen(modMap)
-                if (modName.isNotEmpty()) appendWrapped(builder, "• $modName")
+                if (modName.isNotEmpty()) builder.append("++• ").append(modName).append("++\n")
             }
             val itemNote = (itemMap["itemNote"] as? String) ?: ""
             if (itemNote.isNotEmpty()) {
-                val normalizedNote = itemNote.removePrefix("Item Note:").trim()
-                appendWrapped(builder, "Order Note: $normalizedNote", italic = true)
+                val normalizedNote = normalizeItemNote(itemNote)
+                if (normalizedNote.isNotEmpty()) {
+                    appendInvertedCenteredWrapped(builder, "Item Note: $normalizedNote")
+                }
             }
             if (index != items.lastIndex) {
                 builder.append("__DOT__\n")

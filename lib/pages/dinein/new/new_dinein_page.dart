@@ -1345,9 +1345,6 @@ class _NewDineInPageState extends State<NewDineInPage> {
         // Print pending items to kitchen before clearing cart
         await _handlePrintKitchenPending(requestId: requestId);
 
-        // For NEW dine-in orders, clear cart and redirect to dine-in page
-        const redirectRoute = '/dinein';
-
         setState(() {
           _cartItems.clear();
           _cartData = null;
@@ -1358,13 +1355,9 @@ class _NewDineInPageState extends State<NewDineInPage> {
           _editingOrderNumber = null;
         });
 
-        // Redirect back to appropriate page after successful creation
+        // Redirect back to the home screen after successful creation.
         if (mounted) {
-          Navigator.of(context).pushNamedAndRemoveUntil(
-            redirectRoute,
-            (route) => route.settings.name == '/',
-            arguments: {'tableInfo': _tableInfo},
-          );
+          Navigator.of(context).popUntil((route) => route.isFirst);
         }
       } else {
         // In edit mode, update the order with all current items
