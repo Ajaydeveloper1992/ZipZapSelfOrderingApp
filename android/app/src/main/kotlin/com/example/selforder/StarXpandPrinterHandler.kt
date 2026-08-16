@@ -249,17 +249,27 @@ class StarXpandPrinterHandler(private val context: Context) : MethodChannel.Meth
     private fun renderReceiptTextBitmap(text: String): Bitmap {
         val hasBorder = text.startsWith(receiptBorderMarker)
         val receiptText = if (hasBorder) text.removePrefix(receiptBorderMarker).trimStart('\n') else text
+        val receiptTypeface = if (hasBorder) {
+            Typeface.create("sans-serif-condensed", Typeface.NORMAL)
+        } else {
+            Typeface.MONOSPACE
+        }
+        val receiptBoldTypeface = if (hasBorder) {
+            Typeface.create("sans-serif-condensed", Typeface.BOLD)
+        } else {
+            Typeface.create(Typeface.MONOSPACE, Typeface.BOLD)
+        }
         val normalPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.BLACK
             textSize = 24f
-            typeface = Typeface.create("sans-serif-condensed", Typeface.NORMAL)
+            typeface = receiptTypeface
         }
         val boldPaint = Paint(normalPaint).apply {
-            typeface = Typeface.create("sans-serif-condensed", Typeface.BOLD)
+            typeface = receiptBoldTypeface
         }
         val titlePaint = Paint(normalPaint).apply {
             textSize = 34f
-            typeface = Typeface.create("sans-serif-condensed", Typeface.BOLD)
+            typeface = receiptBoldTypeface
         }
         val invertedPaint = Paint(titlePaint).apply {
             color = Color.WHITE
@@ -271,16 +281,20 @@ class StarXpandPrinterHandler(private val context: Context) : MethodChannel.Meth
         }
         val heroPaint = Paint(normalPaint).apply {
             textSize = 54f
-            typeface = Typeface.create("sans-serif-condensed", Typeface.BOLD)
+            typeface = receiptBoldTypeface
         }
         val itemPaint = Paint(normalPaint).apply {
             textSize = 42f
             typeface = Typeface.create("sans-serif-condensed", Typeface.BOLD)
         }
         val italicPaint = Paint(normalPaint).apply {
-            typeface = Typeface.create("sans-serif-condensed", Typeface.ITALIC)
+            typeface = if (hasBorder) {
+                Typeface.create("sans-serif-condensed", Typeface.ITALIC)
+            } else {
+                Typeface.create(Typeface.MONOSPACE, Typeface.ITALIC)
+            }
         }
-        val horizontalPadding = if (hasBorder) 28f else 16f
+        val horizontalPadding = if (hasBorder) 28f else 8f
         val verticalPadding = if (hasBorder) 28 else 18
         val lines = receiptText.trimEnd('\n').split('\n')
 
@@ -381,24 +395,7 @@ class StarXpandPrinterHandler(private val context: Context) : MethodChannel.Meth
         }
 
         val renderedLines = lines.flatMap { wrapMarkedLine(it) }
-        val unmarkedBlockLeft = if (hasBorder) {
-            horizontalPadding
-        } else {
-            val blockWidth = renderedLines
-                .filter { line ->
-                    line.isNotBlank() &&
-                        line != "__RULE__" &&
-                        line != "__DOT__" &&
-                        markerPair(line).first.isEmpty()
-                }
-                .maxOfOrNull { line -> paintForLine(line).measureText(cleanLine(line)) }
-                ?: 0f
-            if (blockWidth > 0f) {
-                ((printableRasterWidthPx - blockWidth) / 2f).coerceAtLeast(horizontalPadding)
-            } else {
-                horizontalPadding
-            }
-        }
+        val unmarkedBlockLeft = horizontalPadding
         val bitmapHeight = (renderedLines.sumOf { lineHeight(it) } + verticalPadding * 2)
             .coerceAtLeast(lineHeight("") + verticalPadding * 2)
         val bitmap = Bitmap.createBitmap(printableRasterWidthPx, bitmapHeight, Bitmap.Config.ARGB_8888)
@@ -425,6 +422,10 @@ class StarXpandPrinterHandler(private val context: Context) : MethodChannel.Meth
         val invertedBackgroundPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.BLACK
             style = Paint.Style.FILL
+        }
+        val borderedNotePaint = Paint(normalPaint).apply {
+            textSize = 28f
+            typeface = Typeface.create("sans-serif-condensed", Typeface.BOLD)
         }
         val noteBorderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.BLACK
@@ -463,7 +464,7 @@ class StarXpandPrinterHandler(private val context: Context) : MethodChannel.Meth
                     lineIndex++
                 }
 
-                val paint = normalPaint
+                val paint = borderedNotePaint
                 val textLineHeight = paint.fontMetrics.descent - paint.fontMetrics.ascent + 10f
                 val top = y + 4f
                 val bottom = top + (boxLines.size * textLineHeight) + 12f
@@ -2016,9 +2017,9 @@ class StarXpandPrinterHandler(private val context: Context) : MethodChannel.Meth
         return lines
     }
 
-    private fun appendCenteredWrapped(builder: StringBuilder, text: String) {
+    private fun appendCenteredWrapped(builder: StringBuilder, text: String, bold: Boolean = false) {
         for (line in wrapReceiptLines(text, receiptTextColumns)) {
-            builder.append(receiptCenter(line)).append('\n')
+            appendReceiptTextLine(builder, "", receiptCenter(line), bold, false)
         }
     }
 
@@ -2084,16 +2085,16 @@ class StarXpandPrinterHandler(private val context: Context) : MethodChannel.Meth
 
         return buildString {
             append("##").append(storeName).append("##\n")
-            appendCenteredWrapped(this, storeAddress)
-            appendCenteredWrapped(this, storePhone)
-            appendCenteredWrapped(this, storeEmail)
+            appendCenteredWrapped(this, storeAddress, bold = true)
+            appendCenteredWrapped(this, storePhone, bold = true)
+            appendCenteredWrapped(this, storeEmail, bold = true)
             append(receiptDivider()).append('\n')
-            append(receiptColumns("Order Date:", orderDate)).append('\n')
-            append(receiptColumns("Order #:", orderNumber)).append('\n')
-            append(receiptColumns("Customer Name:", customerName)).append('\n')
-            append(receiptColumns("Customer Phone:", customerPhone)).append('\n')
+            append("**").append(receiptColumns("Order Date:", orderDate)).append("**\n")
+            append("**").append(receiptColumns("Order #:", orderNumber)).append("**\n")
+            append("**").append(receiptColumns("Customer Name:", customerName)).append("**\n")
+            append("**").append(receiptColumns("Customer Phone:", customerPhone)).append("**\n")
             append(receiptDivider()).append('\n')
-            append(receiptColumns("Item", "Price")).append('\n')
+            append("**").append(receiptColumns("Item", "Price")).append("**\n")
             append(receiptDivider()).append('\n')
             for (item in items) {
                 val itemMap = item as? Map<*, *> ?: continue
@@ -2105,25 +2106,25 @@ class StarXpandPrinterHandler(private val context: Context) : MethodChannel.Meth
                 for (modifier in modifiers) {
                     val modMap = modifier as? Map<*, *> ?: continue
                     val modName = formatModifierForCustomer(modMap)
-                    if (modName.isNotEmpty()) appendWrapped(this, modName, "  ")
+                    if (modName.isNotEmpty()) appendWrapped(this, modName, "  ", bold = true)
                 }
                 val itemNote = (itemMap["itemNote"] as? String) ?: ""
                 if (itemNote.isNotEmpty()) {
                     val normalizedNote = normalizeItemNote(itemNote)
                     if (normalizedNote.isNotEmpty()) {
-                        appendWrapped(this, "Item Note: $normalizedNote", "  ")
+                        appendWrapped(this, "Item Note: $normalizedNote", "  ", bold = true)
                     }
                 }
                 append('\n')
             }
             append(receiptDivider()).append('\n')
-            append(receiptColumns("Sub Total:", money(subtotal))).append('\n')
-            if (discount > 0) append(receiptColumns("Discount:", "-${money(discount)}")).append('\n')
-            if (tax > 0) append(receiptColumns("Tax:", money(tax))).append('\n')
+            append("**").append(receiptColumns("Sub Total:", money(subtotal))).append("**\n")
+            if (discount > 0) append("**").append(receiptColumns("Discount:", "-${money(discount)}")).append("**\n")
+            if (tax > 0) append("**").append(receiptColumns("Tax:", money(tax))).append("**\n")
             append("**").append(receiptColumns("Total:", money(total))).append("**\n")
             append(receiptDivider()).append('\n')
-            append(receiptCenter("Thank you for your business!")).append('\n')
-            append(receiptCenter("Powered by: ZipZap POS")).append('\n')
+            appendCenteredWrapped(this, "Thank you for your business!", bold = true)
+            appendCenteredWrapped(this, "Powered by: ZipZap POS", bold = true)
         }
     }
 
@@ -2159,7 +2160,7 @@ class StarXpandPrinterHandler(private val context: Context) : MethodChannel.Meth
                 appendInvertedCenteredWrapped(this, tableLine)
             }
             if (partySize > 0) {
-                appendInvertedCenteredWrapped(this, "Party of $partySize")
+                append("@@Party of ").append(partySize).append("@@\n")
             }
             if (isReturningCustomer) {
                 val orderLabel = if (customerOrderCount == 1) "Order" else "Orders"

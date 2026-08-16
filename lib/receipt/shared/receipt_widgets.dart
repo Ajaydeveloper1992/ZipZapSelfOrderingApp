@@ -23,9 +23,9 @@ class ReceiptSection extends StatelessWidget {
             Text(
               heading!,
               style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                fontWeight: FontWeight.w700,
+                fontWeight: FontWeight.w900,
                 letterSpacing: 0.8,
-                color: Colors.black87,
+                color: Colors.black,
               ),
             ),
             const SizedBox(height: 10),
@@ -46,7 +46,7 @@ class ReceiptDivider extends StatelessWidget {
   Widget build(BuildContext context) {
     return Divider(
       thickness: thickness,
-      color: Colors.grey.shade300,
+      color: Colors.black,
       height: 24,
     );
   }
@@ -68,10 +68,13 @@ class ReceiptLabelValueRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final labelStyle = Theme.of(
       context,
-    ).textTheme.bodySmall?.copyWith(color: Colors.black54);
+    ).textTheme.bodySmall?.copyWith(
+      color: Colors.black,
+      fontWeight: FontWeight.w800,
+    );
     final valueStyle = Theme.of(context).textTheme.bodyMedium?.copyWith(
-      fontWeight: valueBold ? FontWeight.w700 : FontWeight.w500,
-      color: Colors.black87,
+      fontWeight: valueBold ? FontWeight.w900 : FontWeight.w800,
+      color: Colors.black,
     );
 
     return Padding(
@@ -109,7 +112,10 @@ class ReceiptNoteBox extends StatelessWidget {
         note,
         style: Theme.of(
           context,
-        ).textTheme.bodyMedium?.copyWith(color: Colors.black87),
+        ).textTheme.bodyMedium?.copyWith(
+          color: Colors.black,
+          fontWeight: FontWeight.w700,
+        ),
       ),
     );
   }
@@ -126,7 +132,10 @@ class ReceiptSubtitle extends StatelessWidget {
       text,
       style: Theme.of(
         context,
-      ).textTheme.bodySmall?.copyWith(color: Colors.black54),
+      ).textTheme.bodySmall?.copyWith(
+        color: Colors.black,
+        fontWeight: FontWeight.w700,
+      ),
     );
   }
 }
@@ -141,8 +150,8 @@ class ReceiptSectionHeading extends StatelessWidget {
     return Text(
       title,
       style: Theme.of(context).textTheme.titleMedium?.copyWith(
-        fontWeight: FontWeight.w700,
-        color: Colors.black87,
+        fontWeight: FontWeight.w900,
+        color: Colors.black,
       ),
     );
   }
@@ -159,7 +168,11 @@ class ReceiptSubtext extends StatelessWidget {
       text,
       style: Theme.of(
         context,
-      ).textTheme.bodySmall?.copyWith(color: Colors.black54, height: 1.4),
+      ).textTheme.bodySmall?.copyWith(
+        color: Colors.black,
+        fontWeight: FontWeight.w700,
+        height: 1.4,
+      ),
     );
   }
 }
@@ -262,7 +275,10 @@ class ReceiptValueRow extends StatelessWidget {
               label,
               style: Theme.of(
                 context,
-              ).textTheme.bodySmall?.copyWith(color: Colors.black54),
+              ).textTheme.bodySmall?.copyWith(
+                color: Colors.black,
+                fontWeight: FontWeight.w800,
+              ),
             ),
           ),
           const SizedBox(width: 12),
@@ -341,7 +357,10 @@ class ReceiptFooterText extends StatelessWidget {
           primary,
           style: Theme.of(
             context,
-          ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
+          ).textTheme.bodyMedium?.copyWith(
+            fontWeight: FontWeight.w900,
+            color: Colors.black,
+          ),
         ),
         if (secondary != null) ...[
           const SizedBox(height: 4),
@@ -349,7 +368,10 @@ class ReceiptFooterText extends StatelessWidget {
             secondary!,
             style: Theme.of(
               context,
-            ).textTheme.bodySmall?.copyWith(color: Colors.black54),
+            ).textTheme.bodySmall?.copyWith(
+              color: Colors.black,
+              fontWeight: FontWeight.w700,
+            ),
           ),
         ],
       ],

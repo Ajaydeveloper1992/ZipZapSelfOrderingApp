@@ -458,13 +458,22 @@ class OrderItemDetail {
 class OrderModifier {
   final String id;
   final String name;
+  final String? modifierGroupId;
 
-  OrderModifier({required this.id, required this.name});
+  OrderModifier({required this.id, required this.name, this.modifierGroupId});
 
   factory OrderModifier.fromJson(Map<String, dynamic> json) {
     return OrderModifier(
       id: json['_id'] as String? ?? json['id'] as String? ?? '',
       name: json['name'] as String? ?? '',
+      modifierGroupId:
+          json['modifierGroup']?.toString() ??
+          json['modifiersgroup']?.toString() ??
+          json['modifierGroupId']?.toString() ??
+          (json['group'] is Map
+              ? ((json['group'] as Map)['_id']?.toString() ??
+                    (json['group'] as Map)['id']?.toString())
+              : null),
     );
   }
 }

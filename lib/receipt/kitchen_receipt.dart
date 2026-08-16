@@ -82,11 +82,23 @@ class KitchenReceipt extends StatelessWidget {
           ..._tablePartyLines.map(
             (line) => Padding(
               padding: const EdgeInsets.only(bottom: 4),
-              child: _InvertedKitchenLine(
-                text: line.text,
-                fontSize: 24,
-                fontWeight: line.bold ? FontWeight.w900 : FontWeight.w800,
-              ),
+              child: line.bold
+                  ? _InvertedKitchenLine(
+                      text: line.text,
+                      fontSize: 24,
+                      fontWeight: FontWeight.w900,
+                    )
+                  : Text(
+                      line.text,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        fontFamily: _receiptFont,
+                        fontSize: 24,
+                        fontWeight: FontWeight.w900,
+                        color: Colors.black,
+                        height: 1.2,
+                      ),
+                    ),
             ),
           ),
         ],
@@ -134,8 +146,8 @@ class KitchenReceipt extends StatelessWidget {
         textAlign: TextAlign.center,
         style: const TextStyle(
           fontFamily: _receiptFont,
-          fontSize: 24,
-          fontWeight: FontWeight.w700,
+          fontSize: 28,
+          fontWeight: FontWeight.w900,
           color: Colors.black,
           height: 1.2,
         ),

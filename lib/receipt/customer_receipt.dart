@@ -100,7 +100,8 @@ class CustomerReceipt extends StatelessWidget {
             'Order Note: ${model.orderNote!}',
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
               fontStyle: FontStyle.italic,
-              color: Colors.black87,
+              fontWeight: FontWeight.w700,
+              color: Colors.black,
             ),
           ),
         ],
@@ -121,8 +122,8 @@ class CustomerReceipt extends StatelessWidget {
                 child: Text(
                   'Item',
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    fontWeight: FontWeight.w700,
-                    color: Colors.black54,
+                    fontWeight: FontWeight.w900,
+                    color: Colors.black,
                   ),
                 ),
               ),
@@ -132,8 +133,8 @@ class CustomerReceipt extends StatelessWidget {
                   'Qty',
                   textAlign: TextAlign.right,
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    fontWeight: FontWeight.w700,
-                    color: Colors.black54,
+                    fontWeight: FontWeight.w900,
+                    color: Colors.black,
                   ),
                 ),
               ),
@@ -143,8 +144,8 @@ class CustomerReceipt extends StatelessWidget {
                   'Price',
                   textAlign: TextAlign.right,
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    fontWeight: FontWeight.w700,
-                    color: Colors.black54,
+                    fontWeight: FontWeight.w900,
+                    color: Colors.black,
                   ),
                 ),
               ),
@@ -280,7 +281,10 @@ class CustomerReceipt extends StatelessWidget {
               '$label :',
               style: Theme.of(
                 context,
-              ).textTheme.bodySmall?.copyWith(color: Colors.black54),
+              ).textTheme.bodySmall?.copyWith(
+                color: Colors.black,
+                fontWeight: FontWeight.w800,
+              ),
             ),
           ),
           Expanded(
@@ -289,7 +293,8 @@ class CustomerReceipt extends StatelessWidget {
               value,
               textAlign: TextAlign.right,
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                fontWeight: boldValue ? FontWeight.w700 : FontWeight.w500,
+                fontWeight: boldValue ? FontWeight.w900 : FontWeight.w800,
+                color: Colors.black,
               ),
             ),
           ),
@@ -323,7 +328,10 @@ class CustomerReceipt extends StatelessWidget {
             model.website!,
             style: Theme.of(
               context,
-            ).textTheme.bodySmall?.copyWith(color: Colors.black54),
+            ).textTheme.bodySmall?.copyWith(
+              color: Colors.black,
+              fontWeight: FontWeight.w700,
+            ),
           ),
         ],
       ],
